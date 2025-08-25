@@ -73,7 +73,6 @@ class GaussianMixtureRegimeDetector(BaseHMMRegimeDetector):
         self.fitted = False
         
     def prepare_features(self, data: pd.DataFrame) -> np.ndarray:
-        # Price-based features
         data = data.copy()
         data['returns'] = data['close'].pct_change()
         data['log_returns'] = np.log(data['close'] / data['close'].shift(1))
@@ -228,7 +227,6 @@ class SimpleHMMRegimeDetector(BaseHMMRegimeDetector):
                 likelihood = np.exp(-0.5 * np.sum((diff / (self.emission_stds[s] + 1e-10)) ** 2))
                 responsibilities[t, s] = likelihood
         
-        # Normalize
         responsibilities = responsibilities / (responsibilities.sum(axis=1, keepdims=True) + 1e-10)
         return responsibilities
     
