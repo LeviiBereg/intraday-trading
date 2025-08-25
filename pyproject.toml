@@ -1,0 +1,24 @@
+[project]
+name = "intraday-trading"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Viacheslav Karpov"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy (>=2.3.2,<3.0.0)",
+    "pandas (>=2.3.2,<3.0.0)",
+    "matplotlib (>=3.10.5,<4.0.0)",
+    "yfinance (>=0.2.65,<0.3.0)",
+    "scikit-learn (>=1.7.1,<2.0.0)"
+]
+
+[tool.poetry]
+packages = [{include = "intraday_trading", from = "src"}]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

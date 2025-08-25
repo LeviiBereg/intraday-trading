@@ -4,8 +4,8 @@ import os
 
 @dataclass
 class DataConfig:
-    timeframes: list = None
-    symbols: list = None
+    timeframes: list | None = None
+    symbols: list | None = None
     data_source: str = "yahoo"
     cache_enabled: bool = True
     cache_dir: str = "data/cache"
