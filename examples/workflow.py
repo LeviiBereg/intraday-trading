@@ -20,7 +20,6 @@ warnings.filterwarnings('ignore')
 
 from src.data.data_loader import YahooDataLoader
 from config.settings import DataConfig
-from src.indicators.technical import PivotPointIndicator
 
 plt.rcParams['figure.figsize'] = (18, 12)
 
@@ -404,11 +403,11 @@ for label, count in label_counts.items():
     print(f"  {label}: {count} observations ({pct:.1f}%)")
 
 
-# In[38]:
+# In[41]:
 
 
 fig, axes = plt.subplots(3, 2, figsize=(18, 15))
-fig.suptitle('HMM Regime Detection Analysis', fontsize=16, fontweight='bold')
+fig.suptitle('Regime Detection Analysis', fontsize=16, fontweight='bold')
 
 ax = axes[0, 0]
 regime_colors = {'bullish_breakout': 'green', 'bearish_breakout': 'red', 'trading_range': 'blue',
@@ -525,32 +524,30 @@ print(f"Max regime duration: {np.max(regime_durations)} hours")
 
 
 # # Support and Resistance Detection
-#
-# This section implements support and resistance level detection for trading range regimes.
+
 # The system identifies key levels that bound the trading ranges and validates them with volume analysis.
 
-# In[40]:
+# In[44]:
 
 
-# Initialize pivot point detector for support/resistance identification
+from src.indicators.technical import PivotPointIndicator
+
+
+# In[46]:
+
+
 pivot_detector = PivotPointIndicator(window=20, min_strength=2)
 
-print("Initializing Support & Resistance Detection...")
-print(f"Pivot detector parameters: window={pivot_detector.window}, min_strength={pivot_detector.min_strength}")
+
+# In[48]:
 
 
-# In[41]:
-
-
-# Calculate pivot points and support/resistance levels
-print("Detecting pivot points and support/resistance levels...")
 sr_data = pivot_detector.calculate(spy_prices_df)
 
 print(f"Calculated pivot points for {len(sr_data)} price observations")
 print(f"Pivot highs detected: {sr_data['pivot_high'].notna().sum()}")
 print(f"Pivot lows detected: {sr_data['pivot_low'].notna().sum()}")
 
-# Display recent support/resistance levels
 recent_data = sr_data.tail(10)
 print(f"\nRecent Support/Resistance Levels:")
 print(f"Dynamic Support: ${recent_data['dynamic_support'].iloc[-1]:.2f}")
@@ -559,26 +556,22 @@ print(f"Range Width: {recent_data['range_width'].iloc[-1]:.1%}")
 print(f"Current Range Position: {recent_data['range_position'].iloc[-1]:.1%}")
 
 
-# In[42]:
+# In[ ]:
 
 
-# Focus on trading range regime periods for support/resistance validation
 if len(regime_df) > 0:
-    # Align support/resistance data with regime data
     sr_regime_df = sr_data.iloc[regime_start_idx:].copy()
     sr_regime_df['regime_label'] = regime_df['regime_label']
 
-    # Filter for trading range periods
     trading_range_periods = sr_regime_df[sr_regime_df['regime_label'] == 'trading_range']
 
-    print(f"\\nTrading Range Analysis:")
+    print(f"Trading Range Analysis:")
     print(f"Trading range periods: {len(trading_range_periods)} observations")
 
     if len(trading_range_periods) > 0:
         print(f"Average range width in trading ranges: {trading_range_periods['range_width'].mean():.1%}")
         print(f"Average range position distribution: {trading_range_periods['range_position'].mean():.1%}")
 
-        # Calculate range quality for trading range periods
         range_quality = pivot_detector.get_range_quality(spy_prices_df.iloc[regime_start_idx:])
         trading_range_quality = range_quality[sr_regime_df['regime_label'] == 'trading_range']
 
@@ -588,20 +581,16 @@ else:
     print("No regime data available for support/resistance validation")
 
 
-# In[43]:
+# In[52]:
 
 
-# Volume-weighted support/resistance validation
 def validate_sr_levels_with_volume(price_data, sr_data, volume_threshold_multiplier=1.5):
-    """Validate support/resistance levels using volume analysis"""
 
     validated_sr = sr_data.copy()
 
-    # Calculate volume moving average
     volume_ma = price_data['volume'].rolling(window=20).mean()
     high_volume_threshold = volume_ma * volume_threshold_multiplier
 
-    # Volume validation for support levels
     support_tests = []
     resistance_tests = []
 
@@ -609,23 +598,19 @@ def validate_sr_levels_with_volume(price_data, sr_data, volume_threshold_multipl
         current_support = sr_data['dynamic_support'].iloc[i]
         current_resistance = sr_data['dynamic_resistance'].iloc[i]
 
-        # Check for support tests (price approaches support with volume)
         recent_data = price_data.iloc[i-5:i+1]
         support_distance = abs(recent_data['low'] - current_support) / current_support
         support_test = (support_distance < 0.01) & (recent_data['volume'] > high_volume_threshold.iloc[i-5:i+1])
 
-        # Check for resistance tests (price approaches resistance with volume)
         resistance_distance = abs(recent_data['high'] - current_resistance) / current_resistance
         resistance_test = (resistance_distance < 0.01) & (recent_data['volume'] > high_volume_threshold.iloc[i-5:i+1])
 
         support_tests.append(support_test.any())
         resistance_tests.append(resistance_test.any())
 
-    # Add validation columns
     validated_sr['support_volume_validated'] = [False] * 20 + support_tests
     validated_sr['resistance_volume_validated'] = [False] * 20 + resistance_tests
 
-    # Calculate validation scores
     validated_sr['sr_validation_score'] = (
         validated_sr['support_volume_validated'].astype(int) +
         validated_sr['resistance_volume_validated'].astype(int)
@@ -636,7 +621,6 @@ def validate_sr_levels_with_volume(price_data, sr_data, volume_threshold_multipl
 print("Validating support/resistance levels with volume analysis...")
 validated_sr_data = validate_sr_levels_with_volume(spy_prices_df, sr_data)
 
-# Summary of volume validation
 support_validated = validated_sr_data['support_volume_validated'].sum()
 resistance_validated = validated_sr_data['resistance_volume_validated'].sum()
 total_observations = len(validated_sr_data) - 20
@@ -647,16 +631,14 @@ print(f"Resistance levels validated by volume: {resistance_validated}/{total_obs
 print(f"Average validation score: {validated_sr_data['sr_validation_score'].mean():.3f}")
 
 
-# In[44]:
+# In[53]:
 
 
-# Support and Resistance visualization
 fig, axes = plt.subplots(3, 2, figsize=(18, 15))
 fig.suptitle('Support & Resistance Analysis', fontsize=16, fontweight='bold')
 
-# Price action with support/resistance levels
 ax = axes[0, 0]
-recent_periods = 500  # Show last 500 periods for clarity
+recent_periods = 500
 recent_sr_data = validated_sr_data.tail(recent_periods)
 recent_price_data = spy_prices_df.tail(recent_periods)
 
@@ -666,7 +648,6 @@ ax.plot(recent_sr_data.index, recent_sr_data['dynamic_support'], label='Dynamic 
 ax.plot(recent_sr_data.index, recent_sr_data['dynamic_resistance'], label='Dynamic Resistance',
         color='red', linestyle='--', alpha=0.7)
 
-# Highlight volume-validated levels
 support_validated_mask = recent_sr_data['support_volume_validated']
 resistance_validated_mask = recent_sr_data['resistance_volume_validated']
 
@@ -682,7 +663,6 @@ ax.set_ylabel('Price ($)')
 ax.legend()
 ax.grid(True, alpha=0.3)
 
-# Range position over time
 ax = axes[0, 1]
 ax.plot(recent_sr_data.index, recent_sr_data['range_position'], linewidth=2, alpha=0.8)
 ax.axhline(y=0.2, color='green', linestyle=':', alpha=0.7, label='Buy Zone (20%)')
@@ -694,7 +674,6 @@ ax.set_ylim(0, 1)
 ax.legend()
 ax.grid(True, alpha=0.3)
 
-# Range width distribution
 ax = axes[1, 0]
 ax.hist(validated_sr_data['range_width'].dropna(), bins=50, alpha=0.7, edgecolor='black')
 ax.axvline(validated_sr_data['range_width'].mean(), color='red', linestyle='--',
@@ -705,7 +684,6 @@ ax.set_ylabel('Frequency')
 ax.legend()
 ax.grid(True, alpha=0.3)
 
-# Range quality over time
 ax = axes[1, 1]
 range_quality_all = pivot_detector.get_range_quality(spy_prices_df)
 ax.plot(range_quality_all.index, range_quality_all, alpha=0.8, linewidth=1)
@@ -716,7 +694,6 @@ ax.set_ylabel('Quality Score')
 ax.legend()
 ax.grid(True, alpha=0.3)
 
-# Volume validation heatmap
 ax = axes[2, 0]
 validation_matrix = np.column_stack([
     validated_sr_data['support_volume_validated'].astype(int),
@@ -731,7 +708,6 @@ ax.set_yticks([0, 1])
 ax.set_yticklabels(['Support', 'Resistance'])
 plt.colorbar(im, ax=ax, label='Validated (1) / Not Validated (0)')
 
-# Pivot points scatter plot
 ax = axes[2, 1]
 pivot_highs = validated_sr_data['pivot_high'].dropna()
 pivot_lows = validated_sr_data['pivot_low'].dropna()
@@ -741,7 +717,6 @@ ax.scatter(pivot_lows.index, pivot_lows.values, color='green', marker='^',
 ax.scatter(pivot_highs.index, pivot_highs.values, color='red', marker='v',
           s=50, alpha=0.7, label=f'Pivot Highs ({len(pivot_highs)})')
 
-# Overlay price for context
 ax.plot(recent_price_data.index, recent_price_data['close'],
        color='blue', alpha=0.3, linewidth=1)
 
@@ -754,58 +729,50 @@ plt.tight_layout()
 plt.show()
 
 
-# In[45]:
+# In[59]:
 
-
-# Integration with regime detection - Trading range specific analysis
-print("="*60)
-print("SUPPORT & RESISTANCE ANALYSIS FOR TRADING RANGES")
-print("="*60)
 
 if len(regime_df) > 0 and 'trading_range' in regime_df['regime_label'].values:
 
-    # Filter for trading range periods only
     sr_regime_aligned = validated_sr_data.iloc[regime_start_idx:].copy()
     sr_regime_aligned['regime_label'] = regime_df['regime_label']
 
     trading_range_sr = sr_regime_aligned[sr_regime_aligned['regime_label'] == 'trading_range']
 
-    print(f"\\nTrading Range Regime Analysis:")
+    print(f"Trading Range Regime Analysis:")
     print(f"Total trading range periods: {len(trading_range_sr)}")
 
     if len(trading_range_sr) > 0:
-        print(f"\\nSupport & Resistance Characteristics in Trading Ranges:")
+        print("Support & Resistance Characteristics in Trading Ranges:")
         print(f"Average range width: {trading_range_sr['range_width'].mean():.2%}")
         print(f"Median range width: {trading_range_sr['range_width'].median():.2%}")
         print(f"Range width std dev: {trading_range_sr['range_width'].std():.2%}")
 
-        print(f"\\nRange Position Distribution:")
+        print("Range Position Distribution:")
         position_stats = trading_range_sr['range_position'].describe()
         for stat, value in position_stats.items():
             print(f"  {stat}: {value:.3f}")
 
-        print(f"\\nVolume Validation in Trading Ranges:")
+        print("Volume Validation in Trading Ranges:")
         tr_support_validated = trading_range_sr['support_volume_validated'].sum()
         tr_resistance_validated = trading_range_sr['resistance_volume_validated'].sum()
         print(f"Support validations: {tr_support_validated}/{len(trading_range_sr)} ({tr_support_validated/len(trading_range_sr)*100:.1f}%)")
         print(f"Resistance validations: {tr_resistance_validated}/{len(trading_range_sr)} ({tr_resistance_validated/len(trading_range_sr)*100:.1f}%)")
 
-        # Range quality in trading ranges
         tr_range_quality = pivot_detector.get_range_quality(spy_prices_df.iloc[regime_start_idx:])
         tr_quality_in_ranges = tr_range_quality[sr_regime_aligned['regime_label'] == 'trading_range']
 
-        print(f"\\nRange Quality in Trading Ranges:")
+        print("Range Quality in Trading Ranges:")
         print(f"Average quality score: {tr_quality_in_ranges.mean():.3f}")
         print(f"High quality periods (>0.7): {(tr_quality_in_ranges > 0.7).sum()}/{len(tr_quality_in_ranges)} ({(tr_quality_in_ranges > 0.7).sum()/len(tr_quality_in_ranges)*100:.1f}%)")
 
-        # Identify best trading opportunities
         high_quality_ranges = trading_range_sr[
             (tr_quality_in_ranges > 0.7) &
             (trading_range_sr['range_width'] > 0.02) &
             ((trading_range_sr['support_volume_validated']) | (trading_range_sr['resistance_volume_validated']))
         ]
 
-        print(f"\\nHigh-Quality Trading Opportunities:")
+        print("High-Quality Trading Opportunities:")
         print(f"Periods meeting all criteria: {len(high_quality_ranges)}")
         if len(high_quality_ranges) > 0:
             print(f"Average range width in best opportunities: {high_quality_ranges['range_width'].mean():.2%}")
@@ -814,19 +781,12 @@ if len(regime_df) > 0 and 'trading_range' in regime_df['regime_label'].values:
 else:
     print("No trading range regime periods detected for analysis")
 
-print("\\n" + "="*60)
+
+# In[62]:
 
 
-# In[46]:
-
-
-# Export support/resistance data for strategy implementation
-print("Preparing support/resistance data for strategy implementation...")
-
-# Create final dataset with all indicators
 final_sr_dataset = validated_sr_data.copy()
 
-# Add regime information if available
 if len(regime_df) > 0:
     regime_aligned = pd.DataFrame(index=final_sr_dataset.index)
     regime_aligned.loc[regime_df.index, 'regime_label'] = regime_df['regime_label']
@@ -836,32 +796,26 @@ if len(regime_df) > 0:
     final_sr_dataset['regime_label'] = regime_aligned['regime_label']
     final_sr_dataset['regime_state'] = regime_aligned['regime_state']
 
-# Add trading signals from pivot detector
 trading_signals = pivot_detector.get_signals(spy_prices_df)
 final_sr_dataset['pivot_signals'] = trading_signals
 
-# Add breakout detection
 breakout_signals = pivot_detector.identify_breakouts(spy_prices_df, breakout_threshold=0.015)
 final_sr_dataset['upside_breakout'] = breakout_signals['upside_breakout']
 final_sr_dataset['downside_breakout'] = breakout_signals['downside_breakout']
 
-# Summary of final dataset
-print(f"\\nFinal Support/Resistance Dataset:")
+print("Final Support/Resistance Dataset:")
 print(f"Total observations: {len(final_sr_dataset)}")
 print(f"Columns: {len(final_sr_dataset.columns)}")
 
-# Key statistics
 recent_final = final_sr_dataset.tail(100)
-print(f"\\nRecent Performance (Last 100 periods):")
+print("Recent Performance (Last 100 periods):")
 print(f"Trading signals generated: {(recent_final['pivot_signals'] != 0).sum()}")
 print(f"Upside breakouts detected: {recent_final['upside_breakout'].sum()}")
 print(f"Downside breakouts detected: {recent_final['downside_breakout'].sum()}")
 print(f"Average range quality: {pivot_detector.get_range_quality(spy_prices_df).tail(100).mean():.3f}")
 
-print(f"\\nSupport/Resistance detection implementation complete!")
 
-
-# In[47]:
+# In[43]:
 
 
 get_ipython().system('jupyter nbconvert --to script workflow.ipynb')
