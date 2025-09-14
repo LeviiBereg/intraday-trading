@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
+# In[1]:
 
 
 import sys
@@ -1058,7 +1058,7 @@ from src.strategy.signal_generator import RangeTradingSignalGenerator
 from config.settings import StrategyConfig
 
 
-# In[ ]:
+# In[44]:
 
 
 strategy_config = StrategyConfig(
@@ -1074,7 +1074,7 @@ range_strategy = RangeTradingStrategy(strategy_config)
 training_results = range_strategy.fit_models(spy_prices_df, final_sr_dataset)
 
 
-# In[ ]:
+# In[45]:
 
 
 range_strategy.update_model_predictions(spy_prices_df, final_sr_dataset)
@@ -1097,7 +1097,7 @@ signal_filters = {
 filtered_signals = signal_generator.filter_signals(trading_signals, signal_filters)
 
 
-# In[ ]:
+# In[46]:
 
 
 signal_stats = signal_generator.get_signal_statistics(filtered_signals)
@@ -1136,7 +1136,7 @@ for i in range(-10, 0):
     print(f"  {timestamp}: Score={score:.3f}, Regime={regime}")
 
 
-# In[ ]:
+# In[47]:
 
 
 fig, axes = plt.subplots(4, 1, figsize=(16, 20))
@@ -1205,7 +1205,7 @@ plt.tight_layout()
 plt.show()
 
 
-# In[51]:
+# In[48]:
 
 
 def analyze_signal_performance(signals: pd.Series, prices: pd.DataFrame,
@@ -1282,7 +1282,7 @@ for category, metrics in performance_results.items():
             print(f"  {metric}: {value}")
 
 
-# In[52]:
+# In[49]:
 
 
 print(f"Regime Detection: {len(range_strategy.current_regime_data)} regime predictions generated")
@@ -1310,8 +1310,297 @@ print(f"  - Risk-adjusted signal generation")
 print(f"  - Multi-layer signal filtering")
 
 
-# In[ ]:
+# # Strategy Parameters Optimization
+
+# In[50]:
 
 
-# !jupyter nbconvert --to script workflow.ipynb
+from src.strategy.parameter_optimizer import RangeTradingOptimizer
+from src.strategy.optimization_metrics import StrategyEvaluator
+from src.backtesting.backtest_engine import BacktestEngine
+
+
+# In[51]:
+
+
+optimization_split = int(0.8 * len(spy_prices_df))
+train_data = spy_prices_df.iloc[:optimization_split].copy()
+val_data = spy_prices_df.iloc[optimization_split:].copy()
+
+print(f"Training data: {len(train_data)} periods ({train_data.index[0]} to {train_data.index[-1]})")
+print(f"Validation data: {len(val_data)} periods ({val_data.index[0]} to {val_data.index[-1]})")
+
+
+# In[67]:
+
+
+backtest_engine = BacktestEngine()
+
+optimizer = RangeTradingOptimizer(
+    data_config=data_config,
+    backtest_engine=backtest_engine,
+    optimization_metric='sharpe_ratio',  # Can be 'sharpe_ratio', 'calmar_ratio', 'total_return'
+    n_trials=50,
+    random_seed=13
+)
+
+
+# In[68]:
+
+
+optimization_result = optimizer.optimize(
+    train_data=train_data,
+    validation_data=val_data
+)
+
+print(f"Best {optimizer.optimization_metric}: {optimization_result.best_value:.4f}")
+
+
+# In[70]:
+
+
+regime_params = {}
+sr_params = {}
+breakout_params = {}
+strategy_params = {}
+risk_params = {}
+signal_params = {}
+
+for param_name, param_value in optimization_result.best_params.items():
+    if param_name.startswith('regime_'):
+        regime_params[param_name] = param_value
+    elif param_name.startswith('pivot_'):
+        sr_params[param_name] = param_value
+    elif param_name.startswith('catboost_'):
+        breakout_params[param_name] = param_value
+    elif param_name.startswith('max_position') or param_name.startswith('stop_') or param_name.startswith('take_') or param_name.startswith('max_daily_risk'):
+        risk_params[param_name] = param_value
+    elif param_name.startswith('buy_') or param_name.startswith('sell_') or param_name.startswith('signal_') or param_name.startswith('min_signal'):
+        signal_params[param_name] = param_value
+    else:
+        strategy_params[param_name] = param_value
+
+print("\n1. REGIME DETECTION PARAMETERS:")
+for param, value in regime_params.items():
+    print(f"   {param}: {value}")
+
+print("\n2. SUPPORT/RESISTANCE PARAMETERS:")
+for param, value in sr_params.items():
+    print(f"   {param}: {value}")
+
+print("\n3. BREAKOUT PREDICTION PARAMETERS:")
+for param, value in breakout_params.items():
+    print(f"   {param}: {value}")
+
+print("\n4. STRATEGY PARAMETERS:")
+for param, value in strategy_params.items():
+    print(f"   {param}: {value}")
+
+print("\n5. RISK MANAGEMENT PARAMETERS:")
+for param, value in risk_params.items():
+    print(f"   {param}: {value}")
+
+print("\n6. SIGNAL GENERATION PARAMETERS:")
+for param, value in signal_params.items():
+    print(f"   {param}: {value}")
+
+
+# In[71]:
+
+
+optimized_strategy, optimized_signal_generator = optimizer.create_strategy(optimization_result.best_params)
+
+print("Testing optimized strategy on validation data...")
+
+# Test on validation data
+validation_backtest = backtest_engine.run_backtest(
+    strategy=optimized_strategy,
+    signal_generator=optimized_signal_generator,
+    data=val_data,
+    initial_capital=100000
+)
+
+print(f"VALIDATION RESULTS:")
+print(f"Total Return: {validation_backtest.metrics['total_return']:.2%}")
+print(f"Sharpe Ratio: {validation_backtest.metrics['sharpe_ratio']:.3f}")
+print(f"Max Drawdown: {validation_backtest.metrics['max_drawdown']:.2%}")
+print(f"Number of Trades: {validation_backtest.metrics['total_trades']}")
+print(f"Win Rate: {validation_backtest.metrics['win_rate']:.1%}")
+
+
+# In[72]:
+
+
+baseline_strategy = RangeTradingStrategy(strategy_config)
+baseline_strategy.fit_models(train_data, final_sr_dataset.iloc[:optimization_split])
+
+baseline_signal_generator = RangeTradingSignalGenerator(
+    strategy=baseline_strategy,
+    buy_threshold=0.3,
+    sell_threshold=-0.3
+)
+
+baseline_backtest = backtest_engine.run_backtest(
+    strategy=baseline_strategy,
+    signal_generator=baseline_signal_generator,
+    data=val_data,
+    initial_capital=100000
+)
+
+print("PERFORMANCE COMPARISON (Validation Data):")
+print("=" * 50)
+print(f"{'Metric':<20} {'Baseline':<15} {'Optimized':<15} {'Improvement':<15}")
+print("-" * 65)
+
+metrics_to_compare = ['total_return', 'sharpe_ratio', 'max_drawdown', 'win_rate', 'total_trades']
+
+for metric in metrics_to_compare:
+    baseline_val = baseline_backtest.metrics[metric]
+    optimized_val = validation_backtest.metrics[metric]
+
+    if metric == 'max_drawdown':
+        improvement = (abs(baseline_val) - abs(optimized_val)) / abs(baseline_val) * 100
+        improvement_str = f"{improvement:+.1f}%" if improvement != 0 else "0.0%"
+        print(f"{metric:<20} {baseline_val:>13.2%} {optimized_val:>13.2%} {improvement_str:>13}")
+    elif metric == 'total_trades':
+        improvement = (optimized_val - baseline_val) / baseline_val * 100 if baseline_val != 0 else 0
+        improvement_str = f"{improvement:+.1f}%" if improvement != 0 else "0.0%"
+        print(f"{metric:<20} {baseline_val:>13.0f} {optimized_val:>13.0f} {improvement_str:>13}")
+    elif metric == 'win_rate':
+        improvement = (optimized_val - baseline_val) * 100
+        improvement_str = f"{improvement:+.1f}pp" if improvement != 0 else "0.0pp"
+        print(f"{metric:<20} {baseline_val:>13.1%} {optimized_val:>13.1%} {improvement_str:>13}")
+    else:
+        improvement = (optimized_val - baseline_val) / baseline_val * 100 if baseline_val != 0 else 0
+        improvement_str = f"{improvement:+.1f}%" if improvement != 0 else "0.0%"
+        if metric in ['total_return']:
+            print(f"{metric:<20} {baseline_val:>13.2%} {optimized_val:>13.2%} {improvement_str:>13}")
+        else:
+            print(f"{metric:<20} {baseline_val:>13.3f} {optimized_val:>13.3f} {improvement_str:>13}")
+
+
+# In[73]:
+
+
+try:
+    param_importance = optimizer.get_feature_importance(optimization_result.study)
+
+    if len(param_importance) > 0:
+        print("\nPARAMETER IMPORTANCE ANALYSIS:")
+        print("=" * 50)
+        print(f"{'Parameter':<30} {'Importance':<15}")
+        print("-" * 45)
+
+        for _, row in param_importance.head(15).iterrows():
+            print(f"{row['parameter']:<30} {row['importance']:<15.4f}")
+    else:
+        print("Parameter importance analysis not available")
+
+except Exception as e:
+    print(f"Could not analyze parameter importance: {e}")
+
+
+# In[74]:
+
+
+fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+fig.suptitle('Strategy Optimization Results', fontsize=16, fontweight='bold')
+
+# Optimization history
+trials_df = optimization_result.optimization_history
+if not trials_df.empty:
+    ax = axes[0, 0]
+    ax.plot(trials_df['number'], trials_df['value'], 'o-', alpha=0.7)
+    ax.set_title('Optimization Progress')
+    ax.set_xlabel('Trial Number')
+    ax.set_ylabel(f'{optimizer.optimization_metric.replace("_", " ").title()}')
+    ax.grid(True, alpha=0.3)
+
+# Parameter importance (if available)
+ax = axes[0, 1]
+try:
+    if len(param_importance) > 0:
+        top_params = param_importance.head(10)
+        ax.barh(range(len(top_params)), top_params['importance'], alpha=0.7)
+        ax.set_yticks(range(len(top_params)))
+        ax.set_yticklabels(top_params['parameter'], fontsize=10)
+        ax.set_title('Top 10 Parameter Importance')
+        ax.set_xlabel('Importance Score')
+        ax.grid(True, alpha=0.3, axis='x')
+    else:
+        ax.text(0.5, 0.5, 'Parameter importance\nnot available',
+                ha='center', va='center', transform=ax.transAxes)
+        ax.set_title('Parameter Importance')
+except:
+    ax.text(0.5, 0.5, 'Parameter importance\nnot available',
+            ha='center', va='center', transform=ax.transAxes)
+    ax.set_title('Parameter Importance')
+
+# Performance comparison
+ax = axes[1, 0]
+metrics = ['Total Return', 'Sharpe Ratio', 'Max Drawdown', 'Win Rate']
+baseline_values = [baseline_backtest.metrics['total_return'],
+                  baseline_backtest.metrics['sharpe_ratio'],
+                  abs(baseline_backtest.metrics['max_drawdown']),
+                  baseline_backtest.metrics['win_rate']]
+optimized_values = [validation_backtest.metrics['total_return'],
+                   validation_backtest.metrics['sharpe_ratio'],
+                   abs(validation_backtest.metrics['max_drawdown']),
+                   validation_backtest.metrics['win_rate']]
+
+x = np.arange(len(metrics))
+width = 0.35
+
+ax.bar(x - width/2, baseline_values, width, label='Baseline', alpha=0.7)
+ax.bar(x + width/2, optimized_values, width, label='Optimized', alpha=0.7)
+ax.set_title('Performance Metrics Comparison')
+ax.set_xticks(x)
+ax.set_xticklabels(metrics, rotation=45)
+ax.legend()
+ax.grid(True, alpha=0.3, axis='y')
+
+# Portfolio value comparison over time
+ax = axes[1, 1]
+if hasattr(baseline_backtest, 'portfolio_values') and hasattr(validation_backtest, 'portfolio_values'):
+    ax.plot(baseline_backtest.portfolio_values.index, baseline_backtest.portfolio_values,
+           label='Baseline', alpha=0.8)
+    ax.plot(validation_backtest.portfolio_values.index, validation_backtest.portfolio_values,
+           label='Optimized', alpha=0.8)
+    ax.set_title('Portfolio Value Evolution')
+    ax.set_ylabel('Portfolio Value ($)')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+else:
+    ax.text(0.5, 0.5, 'Portfolio evolution\nnot available',
+            ha='center', va='center', transform=ax.transAxes)
+    ax.set_title('Portfolio Evolution')
+
+plt.tight_layout()
+plt.show()
+
+
+# In[61]:
+
+
+optimization_results_summary = {
+    'optimization_date': datetime.now().isoformat(),
+    'best_parameters': optimization_result.best_params,
+    'best_score': optimization_result.best_value,
+    'optimization_metric': optimizer.optimization_metric,
+    'n_trials': optimizer.n_trials,
+    'validation_metrics': validation_backtest.metrics,
+    'baseline_metrics': baseline_backtest.metrics
+}
+
+print(f"Optimization completed on: {optimization_results_summary['optimization_date']}")
+print(f"Best {optimizer.optimization_metric}: {optimization_result.best_value:.4f}")
+print(f"Trials completed: {optimizer.n_trials}")
+print(f"Training period: {train_data.index[0]} to {train_data.index[-1]}")
+print(f"Validation period: {val_data.index[0]} to {val_data.index[-1]}")
+
+
+# In[75]:
+
+
+get_ipython().system('jupyter nbconvert --to script workflow.ipynb')
 
