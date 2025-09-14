@@ -50,11 +50,18 @@ class PivotPointIndicator(BaseTechnicalIndicator):
         
         df['dynamic_support'] = self._calculate_dynamic_levels(df, 'pivot_low')
         df['dynamic_resistance'] = self._calculate_dynamic_levels(df, 'pivot_high')
-        
+
+        # Ensure support < resistance
+        support_resistance_valid = df['dynamic_support'] < df['dynamic_resistance']
+
+        # For invalid cases, use close price +/- a small buffer
+        df.loc[~support_resistance_valid, 'dynamic_support'] = df.loc[~support_resistance_valid, 'close'] * 0.99
+        df.loc[~support_resistance_valid, 'dynamic_resistance'] = df.loc[~support_resistance_valid, 'close'] * 1.01
+
         df['range_top'] = df['dynamic_resistance']
         df['range_bottom'] = df['dynamic_support']
         df['range_middle'] = (df['range_top'] + df['range_bottom']) / 2
-        
+
         df['range_width'] = (df['range_top'] - df['range_bottom']) / df['close']
         
         df['range_position'] = ((df['close'] - df['range_bottom']) / 
@@ -111,11 +118,11 @@ class PivotPointIndicator(BaseTechnicalIndicator):
             
             if len(recent_pivots) >= 2:
                 if pivot_col == 'pivot_low':
-                    levels.iloc[i] = recent_pivots.max()
+                    levels.iloc[i] = recent_pivots.min()  # Support: lowest of recent lows
                 else:
-                    levels.iloc[i] = recent_pivots.min()
+                    levels.iloc[i] = recent_pivots.max()  # Resistance: highest of recent highs
                     
-        levels = levels.fillna(method='ffill')
+        levels = levels.ffill()
         
         return levels
     

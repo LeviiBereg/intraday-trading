@@ -10,14 +10,19 @@ class SignalType(Enum):
     CLOSE = 2
 
 class Position:
-    
-    def __init__(self, symbol: str, side: str, size: float, 
-                 entry_price: float, entry_time: pd.Timestamp):
+
+    def __init__(self, symbol: str, side: str, quantity: float,
+                 entry_price: float, entry_time: pd.Timestamp,
+                 entry_value: Optional[float] = None,
+                 entry_cost: Optional[float] = None):
         self.symbol = symbol
         self.side = side
-        self.size = size
+        self.quantity = quantity  # Number of shares/units
+        self.size = quantity      # Backward compatibility
         self.entry_price = entry_price
         self.entry_time = entry_time
+        self.entry_value = entry_value or (quantity * entry_price)
+        self.entry_cost = entry_cost or 0.0
         self.exit_price: Optional[float] = None
         self.exit_time: Optional[pd.Timestamp] = None
         self.pnl: Optional[float] = None
