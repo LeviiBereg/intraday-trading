@@ -815,7 +815,239 @@ print(f"Downside breakouts detected: {recent_final['downside_breakout'].sum()}")
 print(f"Average range quality: {pivot_detector.get_range_quality(spy_prices_df).tail(100).mean():.3f}")
 
 
-# In[43]:
+# # Breakout Probability Prediction
+
+# In[68]:
+
+
+from src.indicators.breakout_probability import CatBoostBreakoutPredictor
+from sklearn.metrics import classification_report
+
+
+# In[69]:
+
+
+breakout_predictor = CatBoostBreakoutPredictor(
+    breakout_threshold=0.02,
+    lookforward_periods=24,
+)
+
+
+# In[70]:
+
+
+spy_prices_df
+
+
+# In[72]:
+
+
+training_results = breakout_predictor.fit(
+    data=spy_prices_df,
+    support_resistance_data=final_sr_dataset,
+    test_size=0.2,
+    validate_model=True
+)
+
+
+# In[73]:
+
+
+print("MODEL TRAINING RESULTS:")
+print(f"Total samples: {training_results['training_stats']['total_samples']}")
+print(f"Training samples: {training_results['training_stats']['training_samples']}")
+print(f"Test samples: {training_results['training_stats']['test_samples']}")
+print(f"Features used: {training_results['training_stats']['feature_count']}")
+print(f"Upward breakout rate: {training_results['training_stats']['upward_breakout_rate']:.3%}")
+print(f"Downward breakout rate: {training_results['training_stats']['downward_breakout_rate']:.3%}")
+
+print("\n🔺 UPWARD BREAKOUT MODEL PERFORMANCE:")
+up_metrics = training_results['upward_model']['classification_report']['macro avg']
+print(f"Precision: {up_metrics['precision']:.3f}")
+print(f"Recall: {up_metrics['recall']:.3f}")
+print(f"F1-Score: {up_metrics['f1-score']:.3f}")
+print(f"ROC AUC: {training_results['upward_model']['roc_auc']:.3f}")
+
+print("\n🔻 DOWNWARD BREAKOUT MODEL PERFORMANCE:")
+down_metrics = training_results['downward_model']['classification_report']['macro avg']
+print(f"Precision: {down_metrics['precision']:.3f}")
+print(f"Recall: {down_metrics['recall']:.3f}")
+print(f"F1-Score: {down_metrics['f1-score']:.3f}")
+print(f"ROC AUC: {training_results['downward_model']['roc_auc']:.3f}")
+
+breakout_predictions = breakout_predictor.predict_breakout_probability(
+    data=spy_prices_df,
+    support_resistance_data=final_sr_dataset
+)
+
+prediction_df = pd.DataFrame(breakout_predictions, index=spy_prices_df.index)
+prediction_df['close'] = spy_prices_df['close']
+prediction_df['range_position'] = final_sr_dataset['range_position']
+
+
+# In[74]:
+
+
+print("\n📈 BREAKOUT PROBABILITY ANALYSIS:")
+print(f"Average upward breakout probability: {prediction_df['upward_probability'].mean():.3%}")
+print(f"Average downward breakout probability: {prediction_df['downward_probability'].mean():.3%}")
+print(f"Average total breakout probability: {prediction_df['total_breakout_probability'].mean():.3%}")
+print(f"Average directional bias: {prediction_df['directional_bias'].mean():.3f}")
+
+high_breakout_threshold = 0.7
+high_breakout_periods = prediction_df[prediction_df['total_breakout_probability'] > high_breakout_threshold]
+print(f"\nHigh breakout probability periods (>{high_breakout_threshold:.0%}): {len(high_breakout_periods)}")
+
+if len(high_breakout_periods) > 0:
+    print(f"Average upward bias during high breakout periods: {high_breakout_periods['directional_bias'].mean():.3f}")
+
+
+# In[75]:
+
+
+fig, axes = plt.subplots(3, 2, figsize=(16, 18))
+
+recent_data = prediction_df.tail(500)
+
+axes[0, 0].plot(recent_data.index, recent_data['close'], 'k-', linewidth=1.5, label='SPY Close')
+axes[0, 0].set_title('SPY Price Evolution (Recent 500 Periods)', fontsize=14, fontweight='bold')
+axes[0, 0].legend()
+axes[0, 0].grid(True, alpha=0.3)
+
+axes[0, 1].plot(recent_data.index, recent_data['upward_probability'], 'g-', alpha=0.8, label='Upward')
+axes[0, 1].plot(recent_data.index, recent_data['downward_probability'], 'r-', alpha=0.8, label='Downward')
+axes[0, 1].axhline(y=0.5, color='gray', linestyle='--', alpha=0.5)
+axes[0, 1].set_title('Breakout Probability Predictions', fontsize=14, fontweight='bold')
+axes[0, 1].set_ylim(0, 1)
+axes[0, 1].legend()
+axes[0, 1].grid(True, alpha=0.3)
+
+axes[1, 0].plot(recent_data.index, recent_data['total_breakout_probability'], 'b-', linewidth=1.5)
+axes[1, 0].axhline(y=high_breakout_threshold, color='orange', linestyle='--', alpha=0.7, label=f'High Risk ({high_breakout_threshold:.0%})')
+axes[1, 0].set_title('Total Breakout Probability', fontsize=14, fontweight='bold')
+axes[1, 0].set_ylim(0, 1)
+axes[1, 0].legend()
+axes[1, 0].grid(True, alpha=0.3)
+
+axes[1, 1].plot(recent_data.index, recent_data['directional_bias'], 'purple', linewidth=1.5)
+axes[1, 1].axhline(y=0, color='gray', linestyle='-', alpha=0.5)
+axes[1, 1].axhline(y=0.5, color='green', linestyle='--', alpha=0.5, label='Upward Bias')
+axes[1, 1].axhline(y=-0.5, color='red', linestyle='--', alpha=0.5, label='Downward Bias')
+axes[1, 1].set_title('Directional Bias (-1=Down, +1=Up)', fontsize=14, fontweight='bold')
+axes[1, 1].set_ylim(-1, 1)
+axes[1, 1].legend()
+axes[1, 1].grid(True, alpha=0.3)
+
+axes[2, 0].hist(prediction_df['upward_probability'], bins=50, alpha=0.7, color='green', edgecolor='black', label='Upward')
+axes[2, 0].hist(prediction_df['downward_probability'], bins=50, alpha=0.7, color='red', edgecolor='black', label='Downward')
+axes[2, 0].set_title('Distribution of Breakout Probabilities', fontsize=14, fontweight='bold')
+axes[2, 0].set_xlabel('Probability')
+axes[2, 0].set_ylabel('Frequency')
+axes[2, 0].legend()
+axes[2, 0].grid(True, alpha=0.3)
+
+scatter_x = prediction_df['range_position'].dropna()
+scatter_y = prediction_df['total_breakout_probability'][scatter_x.index]
+axes[2, 1].scatter(scatter_x, scatter_y, alpha=0.6, s=20, c='blue')
+axes[2, 1].set_xlabel('Range Position')
+axes[2, 1].set_ylabel('Total Breakout Probability')
+axes[2, 1].set_title('Range Position vs Breakout Probability', fontsize=14, fontweight='bold')
+axes[2, 1].grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+
+
+# In[77]:
+
+
+feature_importance = breakout_predictor.get_feature_importance()
+
+upward_importance = pd.Series(feature_importance['upward_model']).sort_values(ascending=False)
+downward_importance = pd.Series(feature_importance['downward_model']).sort_values(ascending=False)
+
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+
+top_features_up = upward_importance.head(15)
+ax1.barh(range(len(top_features_up)), top_features_up.values, color='green', alpha=0.7)
+ax1.set_yticks(range(len(top_features_up)))
+ax1.set_yticklabels(top_features_up.index, fontsize=10)
+ax1.set_xlabel('Importance')
+ax1.set_title('Top 15 Features - Upward Breakout Model', fontsize=14, fontweight='bold')
+ax1.grid(True, alpha=0.3, axis='x')
+
+top_features_down = downward_importance.head(15)
+ax2.barh(range(len(top_features_down)), top_features_down.values, color='red', alpha=0.7)
+ax2.set_yticks(range(len(top_features_down)))
+ax2.set_yticklabels(top_features_down.index, fontsize=10)
+ax2.set_xlabel('Importance')
+ax2.set_title('Top 15 Features - Downward Breakout Model', fontsize=14, fontweight='bold')
+ax2.grid(True, alpha=0.3, axis='x')
+
+plt.tight_layout()
+plt.show()
+
+print("TOP 10 FEATURES FOR UPWARD BREAKOUTS:")
+for i, (feature, importance) in enumerate(upward_importance.head(10).items(), 1):
+    print(f"{i:2d}. {feature}: {importance:.4f}")
+
+print()
+print("TOP 10 FEATURES FOR DOWNWARD BREAKOUTS:")
+for i, (feature, importance) in enumerate(downward_importance.head(10).items(), 1):
+    print(f"{i:2d}. {feature}: {importance:.4f}")
+
+
+# In[80]:
+
+
+combined_predictions = pd.DataFrame({
+    'close': spy_prices_df['close'],
+    'range_position': final_sr_dataset['range_position'],
+    'range_top': final_sr_dataset['range_top'],
+    'range_bottom': final_sr_dataset['range_bottom'],
+    'upward_probability': prediction_df['upward_probability'],
+    'downward_probability': prediction_df['downward_probability'],
+    'total_breakout_probability': prediction_df['total_breakout_probability'],
+    'directional_bias': prediction_df['directional_bias'],
+    'pivot_signals': final_sr_dataset['pivot_signals']
+})
+
+risk_adjusted_positions = pd.Series(0, index=combined_predictions.index)
+
+for i in range(len(combined_predictions)):
+    current_signal = combined_predictions['pivot_signals'].iloc[i]
+    breakout_prob = combined_predictions['total_breakout_probability'].iloc[i]
+    range_pos = combined_predictions['range_position'].iloc[i]
+
+    risk_multiplier = 1 - breakout_prob
+
+    if current_signal == 1 and breakout_prob < 0.6:
+        if range_pos <= 0.3:
+            risk_adjusted_positions.iloc[i] = risk_multiplier * 1.0
+    elif current_signal == -1 and breakout_prob < 0.6:
+        if range_pos >= 0.7:
+            risk_adjusted_positions.iloc[i] = risk_multiplier * -1.0
+    elif current_signal in [2, -2]:
+        risk_adjusted_positions.iloc[i] = 0
+
+combined_predictions['risk_adjusted_position'] = risk_adjusted_positions
+
+print(f"Original pivot signals: {(final_sr_dataset['pivot_signals'] != 0).sum()}")
+print(f"Risk-adjusted signals: {(risk_adjusted_positions != 0).sum()}")
+
+signal_reduction = 1 - (risk_adjusted_positions != 0).sum() / (final_sr_dataset['pivot_signals'] != 0).sum()
+print(f"Signal reduction due to breakout risk: {signal_reduction:.1%}")
+
+recent_combined = combined_predictions.tail(100)
+print(f"\nRecent period analysis (last 100):")
+print(f"High breakout risk periods (>60%): {(recent_combined['total_breakout_probability'] > 0.6).sum()}")
+print(f"Average breakout probability: {recent_combined['total_breakout_probability'].mean():.1%}")
+print(f"Risk-adjusted position changes: {(recent_combined['risk_adjusted_position'] != 0).sum()}")
+
+print(f"Dataset shape: {combined_predictions.shape}")
+
+
+# In[66]:
 
 
 get_ipython().system('jupyter nbconvert --to script workflow.ipynb')
