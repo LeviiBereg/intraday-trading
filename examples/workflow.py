@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[ ]:
 
 
 import sys
 import os
+from typing import Dict
 project_root = os.path.abspath(os.path.join(os.getcwd(), '..'))
 sys.path.insert(0, project_root)
 sys.path.insert(0, os.path.join(project_root, 'src'))
@@ -44,7 +45,7 @@ start_date = end_date - timedelta(days=365)
 print(f"Loading price data for SPY from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
 
 
-# In[ ]:
+# In[3]:
 
 
 symbol = "SPY"
@@ -63,19 +64,19 @@ print(f"\nData shape: {spy_prices_df.shape}")
 print(f"\nColumns: {list(spy_prices_df.columns)}")
 
 
-# In[8]:
+# In[4]:
 
 
 spy_prices_df.head()
 
 
-# In[9]:
+# In[5]:
 
 
 spy_prices_df.describe()
 
 
-# In[11]:
+# In[6]:
 
 
 spy_returns_df = pd.DataFrame(index=spy_prices_df.index)
@@ -94,13 +95,13 @@ spy_returns_df = spy_returns_df.dropna()
 print(f"Returns data shape: {spy_returns_df.shape}")
 
 
-# In[12]:
+# In[7]:
 
 
 spy_returns_df.head()
 
 
-# In[13]:
+# In[8]:
 
 
 spy_returns_df.describe()
@@ -108,7 +109,7 @@ spy_returns_df.describe()
 
 # ## Prices Analysis
 
-# In[14]:
+# In[9]:
 
 
 fig, axes = plt.subplots(2, 2, figsize=(15, 10))
@@ -152,7 +153,7 @@ plt.tight_layout()
 plt.show()
 
 
-# In[15]:
+# In[10]:
 
 
 print(f"Price Statistics for {symbol}:")
@@ -163,7 +164,7 @@ print(f"Volume - Mean: {spy_prices_df['volume'].mean():,.0f}, Std: {spy_prices_d
 
 # ## Returns Analysis
 
-# In[16]:
+# In[11]:
 
 
 fig, axes = plt.subplots(2, 3, figsize=(18, 10))
@@ -219,7 +220,7 @@ plt.tight_layout()
 plt.show()
 
 
-# In[19]:
+# In[12]:
 
 
 close_returns = spy_returns_df['close_return']
@@ -227,7 +228,7 @@ body_returns = spy_returns_df['body_return']
 intrabar_returns = spy_returns_df['intrabar_return']
 
 
-# In[20]:
+# In[13]:
 
 
 print(f"1. CLOSE RETURNS STATISTICS:")
@@ -240,7 +241,7 @@ print(f"   Max Return: {close_returns.max():.4f}%")
 print(f"   Sharpe Ratio (assuming 252*24 periods/year): {(close_returns.mean() / close_returns.std()) * np.sqrt(252*24):.4f}")
 
 
-# In[21]:
+# In[14]:
 
 
 print(f"2. BODY RETURNS STATISTICS (Close-Open):")
@@ -250,7 +251,7 @@ print(f"   Skewness: {body_returns.skew():.4f}")
 print(f"   Kurtosis: {body_returns.kurtosis():.4f}")
 
 
-# In[22]:
+# In[15]:
 
 
 print(f"3. INTRABAR RANGE STATISTICS (High-Low/Open):")
@@ -260,7 +261,7 @@ print(f"   Min Range: {intrabar_returns.min():.4f}%")
 print(f"   Max Range: {intrabar_returns.max():.4f}%")
 
 
-# In[23]:
+# In[16]:
 
 
 print(f"4. RISK METRICS:")
@@ -270,7 +271,7 @@ print(f"   Expected Shortfall (1%): {close_returns[close_returns <= np.percentil
 print(f"   Expected Shortfall (5%): {close_returns[close_returns <= np.percentile(close_returns, 5)].mean():.4f}%")
 
 
-# In[24]:
+# In[17]:
 
 
 print(f"5. DISTRIBUTION ANALYSIS:")
@@ -295,7 +296,7 @@ if positive_returns > 0 and negative_returns > 0:
 
 # # Regime Detection
 
-# In[29]:
+# In[18]:
 
 
 from src.regime_detection.hmm import GaussianMixtureRegimeDetector
@@ -306,13 +307,13 @@ from src.regime_detection.hmm import GaussianMixtureRegimeDetector
 # - Bearish breakout: Strong downward momentum with high volatility
 # - Trading range: Low volatility sideways movement
 
-# In[31]:
+# In[19]:
 
 
 regime_detector = GaussianMixtureRegimeDetector(n_states=3, random_state=13)
 
 
-# In[33]:
+# In[20]:
 
 
 hmm_features = regime_detector.prepare_features(spy_prices_df)
@@ -322,7 +323,7 @@ print(f"Features include: returns, volatility, volume ratios, price ratios, RSI,
 print(f"Training period: {len(hmm_features)} observations")
 
 
-# In[35]:
+# In[21]:
 
 
 regime_detector.fit(hmm_features)
@@ -339,7 +340,7 @@ for regime_id, characteristics in regime_characteristics.items():
     print(f"  Momentum: {characteristics['features']['momentum']:.4f}")
 
 
-# In[36]:
+# In[22]:
 
 
 regime_predictions = regime_detector.predict_regime(hmm_features)
@@ -361,7 +362,7 @@ for state, count in regime_counts.items():
     print(f"  Regime {state}: {count} observations ({pct:.1f}%)")
 
 
-# In[37]:
+# In[23]:
 
 
 def map_regimes_to_labels(characteristics):
@@ -403,7 +404,7 @@ for label, count in label_counts.items():
     print(f"  {label}: {count} observations ({pct:.1f}%)")
 
 
-# In[41]:
+# In[24]:
 
 
 fig, axes = plt.subplots(3, 2, figsize=(18, 15))
@@ -499,7 +500,7 @@ plt.tight_layout()
 plt.show()
 
 
-# In[39]:
+# In[25]:
 
 
 for label in regime_labels.values():
@@ -527,19 +528,19 @@ print(f"Max regime duration: {np.max(regime_durations)} hours")
 
 # The system identifies key levels that bound the trading ranges and validates them with volume analysis.
 
-# In[44]:
+# In[26]:
 
 
 from src.indicators.technical import PivotPointIndicator
 
 
-# In[46]:
+# In[27]:
 
 
 pivot_detector = PivotPointIndicator(window=20, min_strength=2)
 
 
-# In[48]:
+# In[28]:
 
 
 sr_data = pivot_detector.calculate(spy_prices_df)
@@ -556,7 +557,7 @@ print(f"Range Width: {recent_data['range_width'].iloc[-1]:.1%}")
 print(f"Current Range Position: {recent_data['range_position'].iloc[-1]:.1%}")
 
 
-# In[ ]:
+# In[29]:
 
 
 if len(regime_df) > 0:
@@ -581,7 +582,7 @@ else:
     print("No regime data available for support/resistance validation")
 
 
-# In[52]:
+# In[30]:
 
 
 def validate_sr_levels_with_volume(price_data, sr_data, volume_threshold_multiplier=1.5):
@@ -631,7 +632,7 @@ print(f"Resistance levels validated by volume: {resistance_validated}/{total_obs
 print(f"Average validation score: {validated_sr_data['sr_validation_score'].mean():.3f}")
 
 
-# In[53]:
+# In[31]:
 
 
 fig, axes = plt.subplots(3, 2, figsize=(18, 15))
@@ -729,7 +730,7 @@ plt.tight_layout()
 plt.show()
 
 
-# In[59]:
+# In[32]:
 
 
 if len(regime_df) > 0 and 'trading_range' in regime_df['regime_label'].values:
@@ -782,7 +783,7 @@ else:
     print("No trading range regime periods detected for analysis")
 
 
-# In[62]:
+# In[33]:
 
 
 final_sr_dataset = validated_sr_data.copy()
@@ -817,14 +818,14 @@ print(f"Average range quality: {pivot_detector.get_range_quality(spy_prices_df).
 
 # # Breakout Probability Prediction
 
-# In[68]:
+# In[34]:
 
 
 from src.indicators.breakout_probability import CatBoostBreakoutPredictor
 from sklearn.metrics import classification_report
 
 
-# In[69]:
+# In[35]:
 
 
 breakout_predictor = CatBoostBreakoutPredictor(
@@ -833,13 +834,13 @@ breakout_predictor = CatBoostBreakoutPredictor(
 )
 
 
-# In[70]:
+# In[36]:
 
 
 spy_prices_df
 
 
-# In[72]:
+# In[37]:
 
 
 training_results = breakout_predictor.fit(
@@ -850,7 +851,7 @@ training_results = breakout_predictor.fit(
 )
 
 
-# In[73]:
+# In[38]:
 
 
 print("MODEL TRAINING RESULTS:")
@@ -885,7 +886,7 @@ prediction_df['close'] = spy_prices_df['close']
 prediction_df['range_position'] = final_sr_dataset['range_position']
 
 
-# In[74]:
+# In[39]:
 
 
 print("\n📈 BREAKOUT PROBABILITY ANALYSIS:")
@@ -902,7 +903,7 @@ if len(high_breakout_periods) > 0:
     print(f"Average upward bias during high breakout periods: {high_breakout_periods['directional_bias'].mean():.3f}")
 
 
-# In[75]:
+# In[40]:
 
 
 fig, axes = plt.subplots(3, 2, figsize=(16, 18))
@@ -958,7 +959,7 @@ plt.tight_layout()
 plt.show()
 
 
-# In[77]:
+# In[41]:
 
 
 feature_importance = breakout_predictor.get_feature_importance()
@@ -997,7 +998,7 @@ for i, (feature, importance) in enumerate(downward_importance.head(10).items(), 
     print(f"{i:2d}. {feature}: {importance:.4f}")
 
 
-# In[80]:
+# In[42]:
 
 
 combined_predictions = pd.DataFrame({
@@ -1047,8 +1048,270 @@ print(f"Risk-adjusted position changes: {(recent_combined['risk_adjusted_positio
 print(f"Dataset shape: {combined_predictions.shape}")
 
 
-# In[66]:
+# # Strategy implementation
+
+# In[43]:
 
 
-get_ipython().system('jupyter nbconvert --to script workflow.ipynb')
+from src.strategy.range_trading_strategy import RangeTradingStrategy
+from src.strategy.signal_generator import RangeTradingSignalGenerator
+from config.settings import StrategyConfig
+
+
+# In[ ]:
+
+
+strategy_config = StrategyConfig(
+    max_breakout_probability=0.7,
+    min_range_width=0.01,
+    range_entry_buffer=0.2,
+    range_exit_buffer=0.8,
+    min_range_quality=0.3,
+    base_position_size=1.0
+)
+
+range_strategy = RangeTradingStrategy(strategy_config)
+training_results = range_strategy.fit_models(spy_prices_df, final_sr_dataset)
+
+
+# In[ ]:
+
+
+range_strategy.update_model_predictions(spy_prices_df, final_sr_dataset)
+
+signal_generator = RangeTradingSignalGenerator(
+    strategy=range_strategy,
+    buy_threshold=0.3,
+    sell_threshold=-0.3
+)
+
+trading_signals = signal_generator.generate_entry_signals(spy_prices_df)
+
+signal_filters = {
+    'allowed_hours': [9, 10, 11, 12, 13, 14, 15],
+    'min_signal_gap': 2,
+    'max_daily_signals': 5,
+    'max_volatility': 0.05
+}
+
+filtered_signals = signal_generator.filter_signals(trading_signals, signal_filters)
+
+
+# In[ ]:
+
+
+signal_stats = signal_generator.get_signal_statistics(filtered_signals)
+
+for key, value in signal_stats.items():
+    if isinstance(value, float):
+        print(f"{key}: {value:.3f}")
+    else:
+        print(f"{key}: {value}")
+
+recent_signals = filtered_signals.tail(100)
+print(f"\nRecent signals (last 100 periods):")
+print(f"Buy signals: {(recent_signals == 'buy').sum()}")
+print(f"Sell signals: {(recent_signals == 'sell').sum()}")
+print(f"Neutral periods: {(recent_signals == 'neutral').sum()}")
+
+print(f"\nDEBUG: Strategy Score Analysis")
+recent_periods_debug = 50
+recent_price_debug = spy_prices_df.tail(recent_periods_debug)
+recent_sr_debug = final_sr_dataset.tail(recent_periods_debug)
+
+print(f"Recent S/R levels (last 5 periods):")
+for i in range(-5, 0):
+    idx = recent_sr_debug.index[i]
+    support = recent_sr_debug['dynamic_support'].iloc[i]
+    resistance = recent_sr_debug['dynamic_resistance'].iloc[i]
+    range_width = recent_sr_debug['range_width'].iloc[i]
+    range_pos = recent_sr_debug['range_position'].iloc[i]
+    print(f"  {idx}: Support=${support:.2f}, Resistance=${resistance:.2f}, Width={range_width:.3f}, Position={range_pos:.3f}")
+
+print(f"\nSample strategy scores (last 10 periods):")
+for i in range(-10, 0):
+    timestamp = recent_price_debug.index[i]
+    score = range_strategy.calculate_strategy_score(timestamp)
+    regime = range_strategy.current_regime_data.loc[timestamp, 'regime_label'] if timestamp in range_strategy.current_regime_data.index else 'unknown'
+    print(f"  {timestamp}: Score={score:.3f}, Regime={regime}")
+
+
+# In[ ]:
+
+
+fig, axes = plt.subplots(4, 1, figsize=(16, 20))
+
+recent_periods = 500
+recent_price = spy_prices_df.tail(recent_periods)
+recent_sr = final_sr_dataset.tail(recent_periods)
+recent_signals_plot = filtered_signals.tail(recent_periods)
+recent_predictions = prediction_df.tail(recent_periods)
+
+ax = axes[0]
+ax.plot(recent_price.index, recent_price['close'], 'k-', linewidth=1.5, label='SPY Close')
+
+buy_mask = recent_signals_plot == 'buy'
+sell_mask = recent_signals_plot == 'sell'
+
+if buy_mask.any():
+    ax.scatter(recent_signals_plot[buy_mask].index,
+              recent_price.loc[recent_signals_plot[buy_mask].index, 'close'],
+              color='green', marker='^', s=100, label='Buy Signals', zorder=5)
+
+if sell_mask.any():
+    ax.scatter(recent_signals_plot[sell_mask].index,
+              recent_price.loc[recent_signals_plot[sell_mask].index, 'close'],
+              color='red', marker='v', s=100, label='Sell Signals', zorder=5)
+
+ax.plot(recent_sr.index, recent_sr['dynamic_support'], 'g--', alpha=0.7, label='Support')
+ax.plot(recent_sr.index, recent_sr['dynamic_resistance'], 'r--', alpha=0.7, label='Resistance')
+ax.set_title('SPY Price with Trading Signals', fontsize=14, fontweight='bold')
+ax.legend()
+ax.grid(True, alpha=0.3)
+
+ax = axes[1]
+strategy_scores = pd.Series(0.0, index=recent_price.index)
+for timestamp in recent_price.index:
+    strategy_scores.loc[timestamp] = range_strategy.calculate_strategy_score(timestamp)
+
+ax.plot(strategy_scores.index, strategy_scores, 'purple', linewidth=2, label='Strategy Score')
+ax.axhline(y=0.5, color='green', linestyle=':', alpha=0.7, label='Buy Threshold')
+ax.axhline(y=-0.5, color='red', linestyle=':', alpha=0.7, label='Sell Threshold')
+ax.axhline(y=0, color='gray', linestyle='-', alpha=0.5)
+ax.set_title('Strategy Score Evolution', fontsize=14, fontweight='bold')
+ax.set_ylabel('Strategy Score')
+ax.legend()
+ax.grid(True, alpha=0.3)
+
+ax = axes[2]
+ax.plot(recent_sr.index, recent_sr['range_position'], 'blue', linewidth=2, label='Range Position')
+ax.axhline(y=0.2, color='green', linestyle=':', alpha=0.7, label='Entry Zone (20%)')
+ax.axhline(y=0.8, color='red', linestyle=':', alpha=0.7, label='Exit Zone (80%)')
+ax.set_title('Range Position', fontsize=14, fontweight='bold')
+ax.set_ylabel('Range Position')
+ax.legend()
+ax.grid(True, alpha=0.3)
+
+ax = axes[3]
+ax.plot(recent_predictions.index, recent_predictions['total_breakout_probability'],
+        'orange', linewidth=2, label='Breakout Probability')
+ax.axhline(y=0.6, color='red', linestyle='--', alpha=0.7, label='Max Allowed (60%)')
+ax.set_title('Breakout Probability', fontsize=14, fontweight='bold')
+ax.set_ylabel('Probability')
+ax.legend()
+ax.grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+
+
+# In[51]:
+
+
+def analyze_signal_performance(signals: pd.Series, prices: pd.DataFrame,
+                              sr_data: pd.DataFrame, predictions: pd.DataFrame) -> Dict:
+    performance_analysis = {
+        'signal_timing': {},
+        'range_analysis': {},
+        'regime_alignment': {},
+        'breakout_avoidance': {}
+    }
+
+    signal_times = signals[signals != 'neutral']
+
+    if len(signal_times) > 0:
+        signal_positions = []
+        for timestamp in signal_times.index:
+            if timestamp in sr_data.index:
+                pos = sr_data.loc[timestamp, 'range_position']
+                if not pd.isna(pos):
+                    signal_positions.append(pos)
+
+        performance_analysis['signal_timing'] = {
+            'avg_range_position': np.mean(signal_positions) if signal_positions else 0,
+            'signals_near_support': sum(1 for p in signal_positions if p <= 0.3),
+            'signals_near_resistance': sum(1 for p in signal_positions if p >= 0.7),
+            'signals_in_middle': sum(1 for p in signal_positions if 0.3 < p < 0.7)
+        }
+
+        signal_breakout_probs = []
+        for timestamp in signal_times.index:
+            if timestamp in predictions.index:
+                prob = predictions.loc[timestamp, 'total_breakout_probability']
+                if not pd.isna(prob):
+                    signal_breakout_probs.append(prob)
+
+        performance_analysis['breakout_avoidance'] = {
+            'avg_breakout_prob': np.mean(signal_breakout_probs) if signal_breakout_probs else 0,
+            'signals_low_breakout': sum(1 for p in signal_breakout_probs if p < 0.3),
+            'signals_medium_breakout': sum(1 for p in signal_breakout_probs if 0.3 <= p < 0.6),
+            'signals_high_breakout': sum(1 for p in signal_breakout_probs if p >= 0.6)
+        }
+
+    if len(range_strategy.current_regime_data) > 0:
+        trading_range_periods = range_strategy.current_regime_data[
+            range_strategy.current_regime_data['regime_label'] == 'trading_range'
+        ]
+
+        signals_in_trading_ranges = 0
+        for timestamp in signal_times.index:
+            if timestamp in trading_range_periods.index:
+                signals_in_trading_ranges += 1
+
+        performance_analysis['regime_alignment'] = {
+            'total_trading_range_periods': len(trading_range_periods),
+            'signals_in_trading_ranges': signals_in_trading_ranges,
+            'regime_alignment_rate': signals_in_trading_ranges / len(signal_times) if len(signal_times) > 0 else 0
+        }
+
+    return performance_analysis
+
+performance_results = analyze_signal_performance(
+    filtered_signals, spy_prices_df, final_sr_dataset, prediction_df
+)
+
+print("\nSTRATEGY PERFORMANCE ANALYSIS:")
+print("="*50)
+
+for category, metrics in performance_results.items():
+    print(f"\n{category.upper().replace('_', ' ')}:")
+    for metric, value in metrics.items():
+        if isinstance(value, float):
+            print(f"  {metric}: {value:.3f}")
+        else:
+            print(f"  {metric}: {value}")
+
+
+# In[52]:
+
+
+print(f"Regime Detection: {len(range_strategy.current_regime_data)} regime predictions generated")
+print(f"Support/Resistance: {len(final_sr_dataset)} S/R levels calculated")
+print(f"Breakout Prediction: {len(prediction_df)} breakout probabilities generated")
+print(f"Signal Generation: {len(filtered_signals)} total periods analyzed")
+
+trading_range_coverage = (range_strategy.current_regime_data['regime_label'] == 'trading_range').sum()
+print(f"Trading Range Coverage: {trading_range_coverage}/{len(range_strategy.current_regime_data)} periods ({trading_range_coverage/len(range_strategy.current_regime_data)*100:.1f}%)")
+
+high_quality_ranges = (pivot_detector.get_range_quality(spy_prices_df) > 0.7).sum()
+print(f"High Quality Ranges: {high_quality_ranges} periods identified")
+
+low_breakout_periods = (prediction_df['total_breakout_probability'] < 0.6).sum()
+print(f"Safe Trading Periods: {low_breakout_periods}/{len(prediction_df)} periods ({low_breakout_periods/len(prediction_df)*100:.1f}%)")
+
+active_signals = len(filtered_signals[filtered_signals != 'neutral'])
+print(f"Active Trading Signals: {active_signals} generated")
+
+print(f"\nStrategy successfully combines:")
+print(f"  - Regime detection (3-state HMM)")
+print(f"  - Dynamic support/resistance detection")
+print(f"  - Breakout probability prediction")
+print(f"  - Risk-adjusted signal generation")
+print(f"  - Multi-layer signal filtering")
+
+
+# In[ ]:
+
+
+# !jupyter nbconvert --to script workflow.ipynb
 

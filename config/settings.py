@@ -24,7 +24,7 @@ class RegimeConfig:
     trend_threshold: float = 0.02
     regime_memory: int = 5
 
-@dataclass  
+@dataclass
 class StrategyConfig:
     """Range trading strategy configuration."""
     pivot_window: int = 20
@@ -32,6 +32,12 @@ class StrategyConfig:
     breakout_threshold: float = 0.7
     max_holding_period: int = 24
     close_at_eod: bool = True
+    max_breakout_probability: float = 0.6
+    min_range_width: float = 0.02
+    range_entry_buffer: float = 0.2
+    range_exit_buffer: float = 0.8
+    min_range_quality: float = 0.5
+    base_position_size: float = 1.0
 
 @dataclass
 class RiskConfig:
