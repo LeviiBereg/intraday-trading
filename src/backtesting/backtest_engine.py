@@ -162,12 +162,12 @@ class BacktestEngine(BaseBacktestEngine):
 
             # Handle new position entry
             if current_position is None and signal in ['buy', 'sell']:
-                # Calculate position size
-                position_size = strategy.calculate_position_size(
-                    current_cash=cash,
-                    current_price=current_price,
-                    signal_strength=1.0  # Simplified
-                )
+                # Convert signal to SignalType enum
+                from ..strategy.base_strategy import SignalType
+                signal_type = SignalType.BUY if signal == 'buy' else SignalType.SELL
+
+                # Calculate position size using correct method signature
+                position_size = strategy.calculate_position_size(signal_type, data.loc[:timestamp])
 
                 if position_size > 0:
                     # Enter new position
