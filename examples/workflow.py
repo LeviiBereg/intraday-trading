@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[55]:
+# In[1]:
 
 
 import sys
@@ -27,7 +27,7 @@ plt.rcParams['figure.figsize'] = (18, 12)
 
 # # Data Preparation
 
-# In[56]:
+# In[4]:
 
 
 data_config = DataConfig(
@@ -40,12 +40,12 @@ data_config = DataConfig(
 data_loader = YahooDataLoader(data_config)
 
 end_date = datetime.now()
-start_date = end_date - timedelta(days=365)
+start_date = end_date - timedelta(days=365 * 2)
 
 print(f"Loading price data for SPY from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
 
 
-# In[57]:
+# In[5]:
 
 
 symbol = "SPY"
@@ -64,19 +64,19 @@ print(f"\nData shape: {spy_prices_df.shape}")
 print(f"\nColumns: {list(spy_prices_df.columns)}")
 
 
-# In[58]:
+# In[6]:
 
 
 spy_prices_df.head()
 
 
-# In[59]:
+# In[7]:
 
 
 spy_prices_df.describe()
 
 
-# In[60]:
+# In[8]:
 
 
 spy_returns_df = pd.DataFrame(index=spy_prices_df.index)
@@ -95,13 +95,13 @@ spy_returns_df = spy_returns_df.dropna()
 print(f"Returns data shape: {spy_returns_df.shape}")
 
 
-# In[61]:
+# In[9]:
 
 
 spy_returns_df.head()
 
 
-# In[62]:
+# In[10]:
 
 
 spy_returns_df.describe()
@@ -109,7 +109,7 @@ spy_returns_df.describe()
 
 # ## Prices Analysis
 
-# In[63]:
+# In[11]:
 
 
 fig, axes = plt.subplots(2, 2, figsize=(15, 10))
@@ -153,7 +153,7 @@ plt.tight_layout()
 plt.show()
 
 
-# In[64]:
+# In[12]:
 
 
 print(f"Price Statistics for {symbol}:")
@@ -164,7 +164,7 @@ print(f"Volume - Mean: {spy_prices_df['volume'].mean():,.0f}, Std: {spy_prices_d
 
 # ## Returns Analysis
 
-# In[65]:
+# In[13]:
 
 
 fig, axes = plt.subplots(2, 3, figsize=(18, 10))
@@ -220,7 +220,7 @@ plt.tight_layout()
 plt.show()
 
 
-# In[66]:
+# In[14]:
 
 
 close_returns = spy_returns_df['close_return']
@@ -228,7 +228,7 @@ body_returns = spy_returns_df['body_return']
 intrabar_returns = spy_returns_df['intrabar_return']
 
 
-# In[67]:
+# In[15]:
 
 
 print(f"1. CLOSE RETURNS STATISTICS:")
@@ -241,7 +241,7 @@ print(f"   Max Return: {close_returns.max():.4f}%")
 print(f"   Sharpe Ratio (assuming 252*24 periods/year): {(close_returns.mean() / close_returns.std()) * np.sqrt(252*24):.4f}")
 
 
-# In[68]:
+# In[16]:
 
 
 print(f"2. BODY RETURNS STATISTICS (Close-Open):")
@@ -251,7 +251,7 @@ print(f"   Skewness: {body_returns.skew():.4f}")
 print(f"   Kurtosis: {body_returns.kurtosis():.4f}")
 
 
-# In[69]:
+# In[17]:
 
 
 print(f"3. INTRABAR RANGE STATISTICS (High-Low/Open):")
@@ -261,7 +261,7 @@ print(f"   Min Range: {intrabar_returns.min():.4f}%")
 print(f"   Max Range: {intrabar_returns.max():.4f}%")
 
 
-# In[70]:
+# In[18]:
 
 
 print(f"4. RISK METRICS:")
@@ -271,7 +271,7 @@ print(f"   Expected Shortfall (1%): {close_returns[close_returns <= np.percentil
 print(f"   Expected Shortfall (5%): {close_returns[close_returns <= np.percentile(close_returns, 5)].mean():.4f}%")
 
 
-# In[71]:
+# In[19]:
 
 
 print(f"5. DISTRIBUTION ANALYSIS:")
@@ -296,7 +296,7 @@ if positive_returns > 0 and negative_returns > 0:
 
 # # Regime Detection
 
-# In[72]:
+# In[20]:
 
 
 from src.regime_detection.hmm import GaussianMixtureRegimeDetector
@@ -307,13 +307,13 @@ from src.regime_detection.hmm import GaussianMixtureRegimeDetector
 # - Bearish breakout: Strong downward momentum with high volatility
 # - Trading range: Low volatility sideways movement
 
-# In[73]:
+# In[21]:
 
 
 regime_detector = GaussianMixtureRegimeDetector(n_states=3, random_state=13)
 
 
-# In[74]:
+# In[22]:
 
 
 hmm_features = regime_detector.prepare_features(spy_prices_df)
@@ -323,7 +323,7 @@ print(f"Features include: returns, volatility, volume ratios, price ratios, RSI,
 print(f"Training period: {len(hmm_features)} observations")
 
 
-# In[75]:
+# In[23]:
 
 
 regime_detector.fit(hmm_features)
@@ -340,7 +340,7 @@ for regime_id, characteristics in regime_characteristics.items():
     print(f"  Momentum: {characteristics['features']['momentum']:.4f}")
 
 
-# In[76]:
+# In[24]:
 
 
 regime_predictions = regime_detector.predict_regime(hmm_features)
@@ -362,7 +362,7 @@ for state, count in regime_counts.items():
     print(f"  Regime {state}: {count} observations ({pct:.1f}%)")
 
 
-# In[77]:
+# In[25]:
 
 
 def map_regimes_to_labels(characteristics):
@@ -404,7 +404,7 @@ for label, count in label_counts.items():
     print(f"  {label}: {count} observations ({pct:.1f}%)")
 
 
-# In[78]:
+# In[26]:
 
 
 fig, axes = plt.subplots(3, 2, figsize=(18, 15))
@@ -500,7 +500,7 @@ plt.tight_layout()
 plt.show()
 
 
-# In[79]:
+# In[27]:
 
 
 for label in regime_labels.values():
@@ -528,19 +528,19 @@ print(f"Max regime duration: {np.max(regime_durations)} hours")
 
 # The system identifies key levels that bound the trading ranges and validates them with volume analysis.
 
-# In[80]:
+# In[28]:
 
 
 from src.indicators.technical import PivotPointIndicator
 
 
-# In[81]:
+# In[29]:
 
 
 pivot_detector = PivotPointIndicator(window=20, min_strength=2)
 
 
-# In[82]:
+# In[30]:
 
 
 sr_data = pivot_detector.calculate(spy_prices_df)
@@ -557,7 +557,7 @@ print(f"Range Width: {recent_data['range_width'].iloc[-1]:.1%}")
 print(f"Current Range Position: {recent_data['range_position'].iloc[-1]:.1%}")
 
 
-# In[83]:
+# In[31]:
 
 
 if len(regime_df) > 0:
@@ -582,7 +582,7 @@ else:
     print("No regime data available for support/resistance validation")
 
 
-# In[84]:
+# In[32]:
 
 
 def validate_sr_levels_with_volume(price_data, sr_data, volume_threshold_multiplier=1.5):
@@ -632,7 +632,7 @@ print(f"Resistance levels validated by volume: {resistance_validated}/{total_obs
 print(f"Average validation score: {validated_sr_data['sr_validation_score'].mean():.3f}")
 
 
-# In[85]:
+# In[33]:
 
 
 fig, axes = plt.subplots(3, 2, figsize=(18, 15))
@@ -730,7 +730,7 @@ plt.tight_layout()
 plt.show()
 
 
-# In[86]:
+# In[34]:
 
 
 if len(regime_df) > 0 and 'trading_range' in regime_df['regime_label'].values:
@@ -783,7 +783,7 @@ else:
     print("No trading range regime periods detected for analysis")
 
 
-# In[87]:
+# In[35]:
 
 
 final_sr_dataset = validated_sr_data.copy()
@@ -818,14 +818,14 @@ print(f"Average range quality: {pivot_detector.get_range_quality(spy_prices_df).
 
 # # Breakout Probability Prediction
 
-# In[88]:
+# In[36]:
 
 
 from src.indicators.breakout_probability import CatBoostBreakoutPredictor
 from sklearn.metrics import classification_report
 
 
-# In[89]:
+# In[37]:
 
 
 breakout_predictor = CatBoostBreakoutPredictor(
@@ -834,13 +834,13 @@ breakout_predictor = CatBoostBreakoutPredictor(
 )
 
 
-# In[90]:
+# In[38]:
 
 
 spy_prices_df
 
 
-# In[91]:
+# In[39]:
 
 
 training_results = breakout_predictor.fit(
@@ -851,7 +851,7 @@ training_results = breakout_predictor.fit(
 )
 
 
-# In[92]:
+# In[40]:
 
 
 print("MODEL TRAINING RESULTS:")
@@ -886,7 +886,7 @@ prediction_df['close'] = spy_prices_df['close']
 prediction_df['range_position'] = final_sr_dataset['range_position']
 
 
-# In[93]:
+# In[41]:
 
 
 print("\n📈 BREAKOUT PROBABILITY ANALYSIS:")
@@ -903,7 +903,7 @@ if len(high_breakout_periods) > 0:
     print(f"Average upward bias during high breakout periods: {high_breakout_periods['directional_bias'].mean():.3f}")
 
 
-# In[94]:
+# In[42]:
 
 
 fig, axes = plt.subplots(3, 2, figsize=(16, 18))
@@ -959,7 +959,7 @@ plt.tight_layout()
 plt.show()
 
 
-# In[95]:
+# In[43]:
 
 
 feature_importance = breakout_predictor.get_feature_importance()
@@ -998,7 +998,7 @@ for i, (feature, importance) in enumerate(downward_importance.head(10).items(), 
     print(f"{i:2d}. {feature}: {importance:.4f}")
 
 
-# In[96]:
+# In[44]:
 
 
 combined_predictions = pd.DataFrame({
@@ -1050,7 +1050,7 @@ print(f"Dataset shape: {combined_predictions.shape}")
 
 # # Strategy implementation
 
-# In[97]:
+# In[45]:
 
 
 from src.strategy.range_trading_strategy import RangeTradingStrategy
@@ -1058,7 +1058,7 @@ from src.strategy.signal_generator import RangeTradingSignalGenerator
 from config.settings import StrategyConfig
 
 
-# In[98]:
+# In[46]:
 
 
 strategy_config = StrategyConfig(
@@ -1074,7 +1074,7 @@ range_strategy = RangeTradingStrategy(strategy_config)
 training_results = range_strategy.fit_models(spy_prices_df, final_sr_dataset)
 
 
-# In[99]:
+# In[47]:
 
 
 range_strategy.update_model_predictions(spy_prices_df, final_sr_dataset)
@@ -1097,7 +1097,7 @@ signal_filters = {
 filtered_signals = signal_generator.filter_signals(trading_signals, signal_filters)
 
 
-# In[100]:
+# In[48]:
 
 
 signal_stats = signal_generator.get_signal_statistics(filtered_signals)
@@ -1136,7 +1136,7 @@ for i in range(-10, 0):
     print(f"  {timestamp}: Score={score:.3f}, Regime={regime}")
 
 
-# In[101]:
+# In[49]:
 
 
 fig, axes = plt.subplots(4, 1, figsize=(16, 20))
@@ -1205,7 +1205,7 @@ plt.tight_layout()
 plt.show()
 
 
-# In[102]:
+# In[50]:
 
 
 def analyze_signal_performance(signals: pd.Series, prices: pd.DataFrame,
@@ -1282,7 +1282,7 @@ for category, metrics in performance_results.items():
             print(f"  {metric}: {value}")
 
 
-# In[103]:
+# In[51]:
 
 
 print(f"Regime Detection: {len(range_strategy.current_regime_data)} regime predictions generated")
@@ -1312,7 +1312,7 @@ print(f"  - Multi-layer signal filtering")
 
 # # Strategy Parameters Optimization
 
-# In[104]:
+# In[52]:
 
 
 from src.strategy.parameter_optimizer import RangeTradingOptimizer
@@ -1320,7 +1320,7 @@ from src.strategy.optimization_metrics import StrategyEvaluator
 from src.backtesting.backtest_engine import BacktestEngine
 
 
-# In[105]:
+# In[53]:
 
 
 optimization_split = int(0.8 * len(spy_prices_df))
@@ -1331,7 +1331,7 @@ print(f"Training data: {len(train_data)} periods ({train_data.index[0]} to {trai
 print(f"Validation data: {len(val_data)} periods ({val_data.index[0]} to {val_data.index[-1]})")
 
 
-# In[106]:
+# In[54]:
 
 
 backtest_engine = BacktestEngine()
@@ -1340,12 +1340,12 @@ optimizer = RangeTradingOptimizer(
     data_config=data_config,
     backtest_engine=backtest_engine,
     optimization_metric='sharpe_ratio',  # Can be 'sharpe_ratio', 'calmar_ratio', 'total_return'
-    n_trials=50,
+    n_trials=10,
     random_seed=13
 )
 
 
-# In[107]:
+# In[55]:
 
 
 optimization_result = optimizer.optimize(
@@ -1356,7 +1356,7 @@ optimization_result = optimizer.optimize(
 print(f"Best {optimizer.optimization_metric}: {optimization_result.best_value:.4f}")
 
 
-# In[108]:
+# In[56]:
 
 
 regime_params = {}
@@ -1405,12 +1405,23 @@ for param, value in signal_params.items():
     print(f"   {param}: {value}")
 
 
-# In[116]:
+# In[57]:
 
 
 optimized_strategy, optimized_signal_generator = optimizer.create_strategy(optimization_result.best_params)
 
 print("Testing optimized strategy on validation data...")
+
+# CRITICAL FIX: Fit models and update predictions for validation
+val_sr_data = pivot_detector.calculate(val_data)
+print(f"Created S/R data for validation: {len(val_sr_data)} periods")
+
+optimized_strategy.fit_models(train_data, final_sr_dataset.iloc[:optimization_split])
+print("Models fitted on training data")
+
+print("Updating predictions for validation period...")
+optimized_strategy.update_model_predictions(val_data, val_sr_data)
+print("Predictions updated for validation period")
 
 validation_backtest = backtest_engine.run_backtest(
     strategy=optimized_strategy,
@@ -1427,11 +1438,12 @@ print(f"Number of Trades: {validation_backtest.metrics['total_trades']}")
 print(f"Win Rate: {validation_backtest.metrics['win_rate']:.1%}")
 
 
-# In[117]:
+# In[58]:
 
 
 baseline_strategy = RangeTradingStrategy(strategy_config)
 baseline_strategy.fit_models(train_data, final_sr_dataset.iloc[:optimization_split])
+baseline_strategy.update_model_predictions(val_data, val_sr_data)
 
 baseline_signal_generator = RangeTradingSignalGenerator(
     strategy=baseline_strategy,
@@ -1445,6 +1457,55 @@ baseline_backtest = backtest_engine.run_backtest(
     data=val_data,
     initial_capital=100000
 )
+
+print("\nDEBUG: Validation Signal Analysis:")
+print("=" * 50)
+
+val_signals = baseline_signal_generator.generate_entry_signals(val_data)
+signal_counts = val_signals.value_counts()
+print(f"Validation signals generated: {dict(signal_counts)}")
+
+if hasattr(baseline_strategy, 'current_regime_data') and baseline_strategy.current_regime_data is not None:
+    regime_counts = baseline_strategy.current_regime_data['regime_label'].value_counts()
+    print(f"Validation regime distribution: {dict(regime_counts)}")
+
+    trading_range_count = (baseline_strategy.current_regime_data['regime_label'] == 'trading_range').sum()
+    print(f"Trading range periods in validation: {trading_range_count}/{len(baseline_strategy.current_regime_data)} ({trading_range_count/len(baseline_strategy.current_regime_data)*100:.1f}%)")
+
+sample_scores = []
+sample_details = []
+for i in range(min(10, len(val_data))):
+    timestamp = val_data.index[i]
+    score = baseline_strategy.calculate_strategy_score(timestamp)
+    sample_scores.append(score)
+
+    if i < 5:
+        regime = baseline_strategy.current_regime_data.loc[timestamp, 'regime_label'] if timestamp in baseline_strategy.current_regime_data.index else 'missing'
+        range_pos = val_sr_data.loc[timestamp, 'range_position'] if timestamp in val_sr_data.index else 'missing'
+        range_width = val_sr_data.loc[timestamp, 'range_width'] if timestamp in val_sr_data.index else 'missing'
+        breakout_prob = baseline_strategy.current_breakout_predictions.loc[timestamp, 'total_breakout_probability'] if timestamp in baseline_strategy.current_breakout_predictions.index else 'missing'
+
+        sample_details.append(f"  {i}: Score={score:.3f}, Regime={regime}, RangePos={range_pos}, Width={range_width}, BreakoutProb={breakout_prob}")
+
+print(f"Sample strategy scores (first 10): {[f'{s:.3f}' for s in sample_scores]}")
+print(f"Non-zero scores in sample: {sum(1 for s in sample_scores if abs(s) > 0.001)}/10")
+print("Detailed sample analysis:")
+for detail in sample_details:
+    print(detail)
+
+print(f"\nSignal generator settings:")
+print(f"  Buy threshold: {baseline_signal_generator.buy_threshold}")
+print(f"  Sell threshold: {baseline_signal_generator.sell_threshold}")
+print(f"  Min signal strength: {baseline_signal_generator.min_signal_strength}")
+
+scores_meeting_buy = sum(1 for s in sample_scores if s >= baseline_signal_generator.buy_threshold)
+scores_meeting_sell = sum(1 for s in sample_scores if s <= baseline_signal_generator.sell_threshold)
+print(f"  Scores meeting buy threshold ({baseline_signal_generator.buy_threshold}): {scores_meeting_buy}/10")
+print(f"  Scores meeting sell threshold ({baseline_signal_generator.sell_threshold}): {scores_meeting_sell}/10")
+
+
+# In[59]:
+
 
 print("PERFORMANCE COMPARISON (Validation Data):")
 print("=" * 50)
@@ -1478,7 +1539,7 @@ for metric in metrics_to_compare:
             print(f"{metric:<20} {baseline_val:>13.3f} {optimized_val:>13.3f} {improvement_str:>13}")
 
 
-# In[118]:
+# In[60]:
 
 
 try:
@@ -1499,7 +1560,7 @@ except Exception as e:
     print(f"Could not analyze parameter importance: {e}")
 
 
-# In[ ]:
+# In[61]:
 
 
 fig, axes = plt.subplots(2, 2, figsize=(16, 12))
@@ -1574,7 +1635,7 @@ plt.tight_layout()
 plt.show()
 
 
-# In[120]:
+# In[62]:
 
 
 optimization_results_summary = {
@@ -1594,8 +1655,8 @@ print(f"Training period: {train_data.index[0]} to {train_data.index[-1]}")
 print(f"Validation period: {val_data.index[0]} to {val_data.index[-1]}")
 
 
-# In[123]:
+# In[ ]:
 
 
-# !jupyter nbconvert --to script workflow.ipynb
+get_ipython().system('jupyter nbconvert --to script workflow.ipynb')
 
