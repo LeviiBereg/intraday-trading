@@ -328,4 +328,9 @@ class RangeTradingStrategy(BaseStrategy):
         # Calculate final position size
         position_size = base_size * signal_adjustment * risk_adjustment * volatility_adjustment
 
+        # Ensure minimum position size to avoid micro-positions
+        min_position_size = 0.01 * base_size  # 1% of base size minimum
+        if position_size > 0 and position_size < min_position_size:
+            position_size = min_position_size
+
         return max(0.0, position_size)
