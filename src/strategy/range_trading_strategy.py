@@ -4,7 +4,6 @@ from typing import Dict, List, Optional, Tuple
 from .base_strategy import BaseStrategy, SignalType, Position
 from ..regime_detection.hmm import GaussianMixtureRegimeDetector
 from ..indicators.technical import PivotPointIndicator
-from ..indicators.breakout_probability import CatBoostBreakoutPredictor
 
 
 class RangeTradingStrategy(BaseStrategy):
@@ -25,46 +24,37 @@ class RangeTradingStrategy(BaseStrategy):
             window=20,
             min_strength=2
         )
-        self.breakout_predictor = CatBoostBreakoutPredictor(
-            breakout_threshold=0.02,
-            lookforward_periods=24
-        )
 
         # Strategy parameters
-        self.max_breakout_probability = getattr(config, 'max_breakout_probability', 0.6)
         self.min_range_width = getattr(config, 'min_range_width', 0.02)
-        self.range_entry_buffer = getattr(config, 'range_entry_buffer', 0.2)
-        self.range_exit_buffer = getattr(config, 'range_exit_buffer', 0.8)
         self.min_range_quality = getattr(config, 'min_range_quality', 0.5)
+        # Distance-based trading parameters
+        self.support_distance_threshold = getattr(config, 'support_distance_threshold', 0.15)
+        self.resistance_distance_threshold = getattr(config, 'resistance_distance_threshold', 0.15)
+        self.max_trading_distance = getattr(config, 'max_trading_distance', 0.4)
+        # Score threshold parameters for entry signals
+        self.buy_score_threshold = getattr(config, 'buy_score_threshold', 0.3)
+        self.sell_score_threshold = getattr(config, 'sell_score_threshold', 0.3)
 
         # Internal state
         self.is_fitted = False
         self.current_regime_data = None
         self.current_sr_data = None
-        self.current_breakout_predictions = None
 
     def fit_models(self, price_data: pd.DataFrame,
                    support_resistance_data: pd.DataFrame) -> Dict:
-        """Fit all the underlying models with historical data."""
+        """Fit the regime detection model with historical data."""
 
         # Fit regime detection model
         hmm_features = self.regime_detector.prepare_features(price_data)
         self.regime_detector.fit(hmm_features)
 
-        # Fit breakout prediction model
-        training_results = self.breakout_predictor.fit(
-            data=price_data,
-            support_resistance_data=support_resistance_data,
-            test_size=0.2,
-            validate_model=True
-        )
-
         self.is_fitted = True
-        return training_results
+        return {'regime_model_fitted': True}
 
     def update_model_predictions(self, price_data: pd.DataFrame,
                                support_resistance_data: pd.DataFrame) -> None:
-        """Update all model predictions with latest data."""
+        """Update regime predictions and support/resistance data."""
         if not self.is_fitted:
             raise ValueError("Models must be fitted before generating predictions")
 
@@ -89,17 +79,6 @@ class RangeTradingStrategy(BaseStrategy):
 
         # Update support/resistance data
         self.current_sr_data = support_resistance_data.copy()
-
-        # Update breakout predictions
-        breakout_predictions = self.breakout_predictor.predict_breakout_probability(
-            data=price_data,
-            support_resistance_data=support_resistance_data
-        )
-
-        self.current_breakout_predictions = pd.DataFrame(
-            breakout_predictions,
-            index=price_data.index
-        )
 
     def _map_regimes_to_labels(self, characteristics: Dict) -> Dict[str, str]:
         """Map regime characteristics to interpretable labels."""
@@ -128,16 +107,14 @@ class RangeTradingStrategy(BaseStrategy):
 
     def calculate_strategy_score(self, current_time: pd.Timestamp) -> float:
         """
-        Calculate bounded numerical strategy score (-1 to +1).
+        Calculate bounded numerical strategy score (-1 to +1) based on distance to support/resistance.
 
         Returns:
-            -1: Strong sell signal
+            -1: Strong sell signal (near resistance)
              0: Neutral/hold
-            +1: Strong buy signal
+            +1: Strong buy signal (near support)
         """
-        if (self.current_regime_data is None or
-            self.current_sr_data is None or
-            self.current_breakout_predictions is None):
+        if (self.current_regime_data is None or self.current_sr_data is None):
             return 0.0
 
         try:
@@ -155,80 +132,56 @@ class RangeTradingStrategy(BaseStrategy):
             if current_time not in self.current_sr_data.index:
                 return 0.0
 
-            range_position = self.current_sr_data.loc[current_time, 'range_position']
             range_width = self.current_sr_data.loc[current_time, 'range_width']
+            dynamic_support = self.current_sr_data.loc[current_time, 'dynamic_support']
+            dynamic_resistance = self.current_sr_data.loc[current_time, 'dynamic_resistance']
 
             # Check minimum range width
             if pd.isna(range_width) or range_width < self.min_range_width:
                 return 0.0
 
-            # Get range quality - use a window around current time
-            try:
-                # Get a small window of data around current time for range quality calculation
-                current_idx = self.current_sr_data.index.get_loc(current_time)
-                start_idx = max(0, current_idx - 10)
-                end_idx = min(len(self.current_sr_data), current_idx + 1)
-                quality_data = self.current_sr_data.iloc[start_idx:end_idx]
-
-                if len(quality_data) > 0:
-                    range_quality = self.pivot_detector.get_range_quality(quality_data)
-                    if len(range_quality) == 0 or range_quality.iloc[-1] < self.min_range_quality:
-                        return 0.0
-                else:
-                    return 0.0
-            except Exception:
-                # If range quality calculation fails, continue with reduced confidence
-                pass
-
-            # Get breakout probability
-            if current_time not in self.current_breakout_predictions.index:
+            # Check if we have valid support/resistance levels
+            if pd.isna(dynamic_support) or pd.isna(dynamic_resistance):
                 return 0.0
 
-            breakout_prob = self.current_breakout_predictions.loc[current_time, 'total_breakout_probability']
-            directional_bias = self.current_breakout_predictions.loc[current_time, 'directional_bias']
-
-            # Avoid high breakout probability periods
-            if breakout_prob > self.max_breakout_probability:
-                return 0.0
-
-            # Calculate base score based on range position
+            # Get current price from range position (reverse calculation)
+            range_position = self.current_sr_data.loc[current_time, 'range_position']
             if pd.isna(range_position):
                 return 0.0
 
-            # Strong buy signal near support (low range position)
-            if range_position <= self.range_entry_buffer:
-                base_score = 1.0 - (range_position / self.range_entry_buffer)
+            # Calculate current price from range position
+            current_price = dynamic_support + (range_position * (dynamic_resistance - dynamic_support))
 
-            # Strong sell signal near resistance (high range position)
-            elif range_position >= self.range_exit_buffer:
-                base_score = -1.0 + ((1.0 - range_position) / (1.0 - self.range_exit_buffer))
+            # Calculate distances to support and resistance as percentage of range width
+            range_span = dynamic_resistance - dynamic_support
+            if range_span <= 0:
+                return 0.0
 
-            # Neutral in middle of range
+            distance_to_support = (current_price - dynamic_support) / range_span
+            distance_to_resistance = (dynamic_resistance - current_price) / range_span
+
+            # Calculate signal strength based on distance thresholds
+            base_score = 0.0
+
+            # Buy signal: gradual increase as we approach support
+            if distance_to_support <= self.support_distance_threshold:
+                # Normalize distance to [0, 1] where 0 = at support, 1 = at threshold
+                normalized_distance = distance_to_support / self.support_distance_threshold
+                # Invert so closer to support gives stronger signal
+                base_score = 1.0 - normalized_distance
+
+            # Sell signal: gradual increase as we approach resistance
+            elif distance_to_resistance <= self.resistance_distance_threshold:
+                # Normalize distance to [0, 1] where 0 = at resistance, 1 = at threshold
+                normalized_distance = distance_to_resistance / self.resistance_distance_threshold
+                # Invert so closer to resistance gives stronger signal (negative)
+                base_score = -(1.0 - normalized_distance)
+
+            # Neutral in middle of range (beyond both thresholds)
             else:
                 base_score = 0.0
-
-            # Adjust for breakout probability (reduce signal strength)
-            breakout_adjustment = 1.0 - breakout_prob
-            adjusted_score = base_score * breakout_adjustment
-
-            # Adjust for range quality
-            try:
-                if 'range_quality' in locals() and len(range_quality) > 0:
-                    quality_adjustment = min(range_quality.iloc[-1], 1.0)
-                else:
-                    quality_adjustment = 0.5  # neutral adjustment if no quality data
-            except Exception:
-                quality_adjustment = 0.5
-
-            final_score = adjusted_score * quality_adjustment
-
-            # Apply directional bias for fine-tuning
-            if abs(directional_bias) > 0.3:
-                bias_adjustment = directional_bias * 0.1  # Small adjustment
-                final_score += bias_adjustment
-
             # Ensure bounded between -1 and 1
-            return np.clip(final_score, -1.0, 1.0)
+            return np.clip(base_score, -1.0, 1.0)
 
         except (KeyError, IndexError, ValueError):
             return 0.0
@@ -247,13 +200,20 @@ class RangeTradingStrategy(BaseStrategy):
         """Determine if conditions are met to enter trade."""
         current_time = data.index[-1]
 
+        # Only trade in trading range regime
+        if (self.current_regime_data is not None and
+            current_time in self.current_regime_data.index):
+            current_regime = self.current_regime_data.loc[current_time, 'regime_label']
+            if current_regime != 'trading_range':
+                return False
+
         # Get strategy score
         score = self.calculate_strategy_score(current_time)
 
-        # Strong signal threshold
-        if signal == SignalType.BUY and score > 0.5:
+        # Use tunable signal thresholds
+        if signal == SignalType.BUY and score > self.buy_score_threshold:
             return True
-        elif signal == SignalType.SELL and score < -0.5:
+        elif signal == SignalType.SELL and score < -self.sell_score_threshold:
             return True
 
         return False
@@ -269,67 +229,52 @@ class RangeTradingStrategy(BaseStrategy):
             if current_regime != 'trading_range':
                 return True
 
-        # Exit on high breakout probability
-        if (self.current_breakout_predictions is not None and
-            current_time in self.current_breakout_predictions.index):
-            breakout_prob = self.current_breakout_predictions.loc[current_time, 'total_breakout_probability']
-            if breakout_prob > self.max_breakout_probability:
-                return True
-
-        # Exit based on range position
+        # Exit based on distance to target levels
         if (self.current_sr_data is not None and
             current_time in self.current_sr_data.index):
-            range_position = self.current_sr_data.loc[current_time, 'range_position']
 
-            if not pd.isna(range_position):
-                # Exit long positions near resistance
-                if position.side == 'long' and range_position >= 0.8:
-                    return True
+            dynamic_support = self.current_sr_data.loc[current_time, 'dynamic_support']
+            dynamic_resistance = self.current_sr_data.loc[current_time, 'dynamic_resistance']
 
-                # Exit short positions near support
-                if position.side == 'short' and range_position <= 0.2:
-                    return True
+            if not (pd.isna(dynamic_support) or pd.isna(dynamic_resistance)):
+                range_span = dynamic_resistance - dynamic_support
+                if range_span > 0:
+                    # Get current price from range position
+                    range_position = self.current_sr_data.loc[current_time, 'range_position']
+                    if pd.isna(range_position):
+                        return False
+                    current_price = dynamic_support + (range_position * range_span)
+
+                    distance_to_support = (current_price - dynamic_support) / range_span
+                    distance_to_resistance = (dynamic_resistance - current_price) / range_span
+
+                    # Exit long positions when close to resistance
+                    if position.side == 'long' and distance_to_resistance <= self.resistance_distance_threshold:
+                        return True
+
+                    # Exit short positions when close to support
+                    if position.side == 'short' and distance_to_support <= self.support_distance_threshold:
+                        return True
 
         return False
 
     def calculate_position_size(self, signal: SignalType, data: pd.DataFrame) -> float:
-        """Calculate optimal position size for trade."""
+        """Calculate optimal position size for trade based on distance to support/resistance."""
         current_time = data.index[-1]
 
         # Get strategy score for signal strength
         score = abs(self.calculate_strategy_score(current_time))
 
-        # Get breakout probability for risk adjustment
-        breakout_risk = 0.5  # default
-        if (self.current_breakout_predictions is not None and
-            current_time in self.current_breakout_predictions.index):
-            breakout_risk = self.current_breakout_predictions.loc[current_time, 'total_breakout_probability']
-
-        # Get range width for volatility adjustment
-        range_volatility = 0.02  # default
-        if (self.current_sr_data is not None and
-            current_time in self.current_sr_data.index):
-            range_width = self.current_sr_data.loc[current_time, 'range_width']
-            if not pd.isna(range_width):
-                range_volatility = range_width
-
         # Base position size from config
         base_size = getattr(self.config, 'base_position_size', 1.0)
 
-        # Adjust for signal strength
+        # Adjust for signal strength (closer to support/resistance = larger position)
         signal_adjustment = score
 
-        # Adjust for breakout risk (reduce size for higher risk)
-        risk_adjustment = 1.0 - breakout_risk
-
-        # Adjust for volatility (reduce size for higher volatility)
-        volatility_adjustment = min(1.0, 0.02 / max(range_volatility, 0.01))
-
         # Calculate final position size
-        position_size = base_size * signal_adjustment * risk_adjustment * volatility_adjustment
+        position_size = base_size * signal_adjustment
 
-        # Ensure minimum position size to avoid micro-positions
-        min_position_size = 0.01 * base_size  # 1% of base size minimum
+        min_position_size = 100 * base_size
         if position_size > 0 and position_size < min_position_size:
             position_size = min_position_size
 

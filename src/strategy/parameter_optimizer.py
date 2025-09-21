@@ -72,24 +72,30 @@ class RangeTradingOptimizer(BaseParameterOptimizer):
         self.logger = logging.getLogger(__name__)
 
     def define_search_space(self, trial: optuna.Trial) -> Dict[str, Any]:
-        """Define search space for parameters that can actually be optimized."""
+        """Define search space for distance-based range trading parameters."""
 
         params = {}
 
-        # Strategy Parameters (these are what RangeTradingStrategy actually uses)
-        params['max_breakout_probability'] = trial.suggest_float('max_breakout_probability', 0.3, 0.8)
-        params['min_range_width'] = trial.suggest_float('min_range_width', 0.005, 0.03)
-        params['range_entry_buffer'] = trial.suggest_float('range_entry_buffer', 0.1, 0.3)
-        params['range_exit_buffer'] = trial.suggest_float('range_exit_buffer', 0.7, 0.9)
+        # Strategy Parameters
+        params['min_range_width'] = trial.suggest_float('min_range_width', 0.005, 0.05)
         params['min_range_quality'] = trial.suggest_float('min_range_quality', 0.1, 0.6)
         params['base_position_size'] = trial.suggest_float('base_position_size', 0.5, 2.0)
 
-        # Pivot Point Parameters (these are accessible via strategy config)
+        # Distance-based trading parameters
+        params['support_distance_threshold'] = trial.suggest_float('support_distance_threshold', 0.05, 0.5)
+        params['resistance_distance_threshold'] = trial.suggest_float('resistance_distance_threshold', 0.05, 0.5)
+        params['max_trading_distance'] = trial.suggest_float('max_trading_distance', 0.2, 0.6)
+
+        # Score threshold parameters for strategy entry signals
+        params['buy_score_threshold'] = trial.suggest_float('buy_score_threshold', 0.1, 0.7)
+        params['sell_score_threshold'] = trial.suggest_float('sell_score_threshold', 0.1, 0.7)
+
+        # Pivot Point Parameters
         params['pivot_window'] = trial.suggest_int('pivot_window', 10, 50)
 
         # Signal Generator Parameters
-        params['buy_threshold'] = trial.suggest_float('buy_threshold', 0.2, 0.6)
-        params['sell_threshold'] = trial.suggest_float('sell_threshold', -0.6, -0.2)
+        params['buy_threshold'] = trial.suggest_float('buy_threshold', 0.05, 1.0)
+        params['sell_threshold'] = trial.suggest_float('sell_threshold', 0.05, 1.0)
         params['neutral_buffer'] = trial.suggest_float('neutral_buffer', 0.05, 0.2)
 
         return params
@@ -97,21 +103,20 @@ class RangeTradingOptimizer(BaseParameterOptimizer):
     def create_strategy(self, params: Dict[str, Any]) -> Tuple[RangeTradingStrategy, RangeTradingSignalGenerator]:
         """Create strategy instance with optimized parameters."""
 
-        # Create strategy configuration with optimized parameters
         strategy_config = StrategyConfig(
             pivot_window=params['pivot_window'],
-            max_breakout_probability=params['max_breakout_probability'],
             min_range_width=params['min_range_width'],
-            range_entry_buffer=params['range_entry_buffer'],
-            range_exit_buffer=params['range_exit_buffer'],
             min_range_quality=params['min_range_quality'],
-            base_position_size=params['base_position_size']
+            base_position_size=params['base_position_size'],
+            support_distance_threshold=params['support_distance_threshold'],
+            resistance_distance_threshold=params['resistance_distance_threshold'],
+            max_trading_distance=params['max_trading_distance'],
+            buy_score_threshold=params['buy_score_threshold'],
+            sell_score_threshold=params['sell_score_threshold']
         )
 
-        # Create strategy instance (only takes StrategyConfig)
         strategy = RangeTradingStrategy(strategy_config)
 
-        # Create signal generator
         signal_generator = RangeTradingSignalGenerator(
             strategy=strategy,
             buy_threshold=params['buy_threshold'],
@@ -127,13 +132,10 @@ class RangeTradingOptimizer(BaseParameterOptimizer):
         """Evaluate strategy performance using backtest."""
 
         try:
-            # Validate input data
             if train_data.empty or len(train_data) < 100:
                 self.logger.warning(f"Insufficient training data: {len(train_data)} rows")
                 return -10.0
 
-            # CRITICAL: Fit the strategy models before backtesting
-            # Create support/resistance data for fitting
             self.logger.debug(f"Creating support/resistance data for {len(train_data)} data points")
             pivot_detector = PivotPointIndicator(window=20, min_strength=2)
             sr_data = pivot_detector.calculate(train_data)
@@ -143,16 +145,13 @@ class RangeTradingOptimizer(BaseParameterOptimizer):
                 return -10.0
 
             # Fit the strategy models
-            self.logger.debug("Fitting strategy models...")
             model_fit_results = strategy.fit_models(train_data, sr_data)
             self.logger.debug(f"Model fitting completed: {model_fit_results is not None}")
 
             # Update predictions for signal generation
-            self.logger.debug("Updating model predictions...")
             strategy.update_model_predictions(train_data, sr_data)
 
             # Run backtest
-            self.logger.debug("Running backtest...")
             results = self.backtest_engine.run_backtest(
                 strategy=strategy,
                 signal_generator=signal_generator,
@@ -188,6 +187,9 @@ class RangeTradingOptimizer(BaseParameterOptimizer):
 
             elif self.optimization_metric == 'profit_factor':
                 return results.metrics.get('profit_factor', -10.0)
+            
+            elif self.optimization_metric == 'win_rate':
+                return results.metrics.get('win_rate', -1)
 
             else:
                 raise ValueError(f"Unknown optimization metric: {self.optimization_metric}")
