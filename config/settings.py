@@ -32,12 +32,15 @@ class StrategyConfig:
     breakout_threshold: float = 0.7
     max_holding_period: int = 24
     close_at_eod: bool = True
-    max_breakout_probability: float = 0.6
     min_range_width: float = 0.02
-    range_entry_buffer: float = 0.2
-    range_exit_buffer: float = 0.8
     min_range_quality: float = 0.5
     base_position_size: float = 1.0
+    support_distance_threshold: float = 0.15
+    resistance_distance_threshold: float = 0.15
+    max_trading_distance: float = 0.4
+    # Score threshold parameters for entry signals
+    buy_score_threshold: float = 0.3
+    sell_score_threshold: float = 0.3
 
 @dataclass
 class RiskConfig:

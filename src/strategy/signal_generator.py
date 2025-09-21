@@ -99,7 +99,7 @@ class RangeTradingSignalGenerator(BaseSignalGenerator):
             # Generate signals based on thresholds
             if avg_score >= self.buy_threshold and score >= self.min_signal_strength:
                 signals.loc[timestamp] = 'buy'
-            elif avg_score <= self.sell_threshold and score <= -self.min_signal_strength:
+            elif avg_score <= self.sell_threshold and abs(score) >= self.min_signal_strength:
                 signals.loc[timestamp] = 'sell'
             else:
                 signals.loc[timestamp] = 'neutral'
